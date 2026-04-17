@@ -1,0 +1,23 @@
+opt_newline:
+    /* empty */
+    | NEWLINE
+    ;
+
+program:
+    /* empty */
+    |
+    program instruction opt_newline
+    { printf("%s\n", flush_line()); }
+    |
+    program label opt_newline
+    { printf("%s\n", flush_line()); }
+    |
+    program directive opt_newline
+    { printf("%s\n", flush_line()); }
+    |
+    program macro opt_newline
+    { flush_line(); }
+    |
+    program NEWLINE
+    { flush_line(); }
+    ;

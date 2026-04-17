@@ -1,0 +1,107 @@
+instruction:
+    zero_operand_mnem
+    {
+        strcpy(last_mnemonic, $1);
+        strcpy($$, $1);
+    }
+    |
+    prefix zero_operand_mnem
+    {
+        strcpy(last_mnemonic, $2);
+        snprintf($$, 256, "%s %s", $1, $2);
+    }
+    |
+    one_operand_mnem operand
+    {
+        strcpy(last_mnemonic, $1);
+        snprintf($$, 256, "%s %s", $1, $2);
+    }
+    |
+    one_operand_mnem
+    {
+        strcpy(last_mnemonic, $1);
+        strcpy($$, $1);
+    }
+    |
+    two_operand_mnem operand COMMA operand
+    {
+        strcpy(last_mnemonic, $1);
+        snprintf($$, 256, "%s %s, %s", $1, $2, $4);
+    }
+    |
+    prefix two_operand_mnem operand COMMA operand
+    {
+        strcpy(last_mnemonic, $2);
+        snprintf($$, 256, "%s %s %s, %s", $1, $2, $3, $5);
+    }
+    ;
+
+prefix:
+    REPE
+    | REPNE
+    | REP
+    ;
+
+zero_operand_mnem:
+    NOP      { strcpy($$, "nop"); }
+    | RET    { strcpy($$, "ret"); }
+    | CMPSB  { strcpy($$, "cmpsb"); }
+    | LOOPE  { strcpy($$, "loope"); }
+    | LOOPNE { strcpy($$, "loopne"); }
+    | STOSD  { strcpy($$, "stosd"); }
+    | STOSB  { strcpy($$, "stosb"); }
+    | SCASB  { strcpy($$, "scasb"); }
+    | MOVSB  { strcpy($$, "movsb"); }
+    | MOVSD  { strcpy($$, "movsd"); }
+    ;
+
+one_operand_mnem:
+    PUSH   { strcpy($$, "push"); }
+    | POP  { strcpy($$, "pop"); }
+    | INC  { strcpy($$, "inc"); }
+    | DEC  { strcpy($$, "dec"); }
+    | NOT  { strcpy($$, "not"); }
+    | MUL  { strcpy($$, "mul"); }
+    | DIV  { strcpy($$, "div"); }
+    | IDIV { strcpy($$, "idiv"); }
+    | JMP  { strcpy($$, "jmp"); }
+    | JE   { strcpy($$, "je"); }
+    | JZ   { strcpy($$, "jz"); }
+    | JNE  { strcpy($$, "jne"); }
+    | JNZ  { strcpy($$, "jnz"); }
+    | JL   { strcpy($$, "jl"); }
+    | JG   { strcpy($$, "jg"); }
+    | JLE  { strcpy($$, "jle"); }
+    | JGE  { strcpy($$, "jge"); }
+    | JA   { strcpy($$, "ja"); }
+    | JB   { strcpy($$, "jb"); }
+    | JAE  { strcpy($$, "jae"); }
+    | JBE  { strcpy($$, "jbe"); }
+    | CALL { strcpy($$, "call"); }
+    | LOOP { strcpy($$, "loop"); }
+    ;
+
+two_operand_mnem:
+    MOV     { strcpy($$, "mov"); }
+    | MOVL  { strcpy($$, "movl"); }
+    | MOVQ  { strcpy($$, "movq"); }
+    | ADD   { strcpy($$, "add"); }
+    | SUB   { strcpy($$, "sub"); }
+    | AND   { strcpy($$, "and"); }
+    | OR    { strcpy($$, "or"); }
+    | XOR   { strcpy($$, "xor"); }
+    | SHL   { strcpy($$, "shl"); }
+    | SHR   { strcpy($$, "shr"); }
+    | SAR   { strcpy($$, "sar"); }
+    | CMP   { strcpy($$, "cmp"); }
+    | TEST  { strcpy($$, "test"); }
+    | LEA   { strcpy($$, "lea"); }
+    | MOVZX { strcpy($$, "movzx"); }
+    | MOVSX { strcpy($$, "movsx"); }
+    | IMUL  { strcpy($$, "imul"); }
+    ;
+
+label:
+    LABEL COLON
+    { strcpy($$, $1); }
+    ;

@@ -1,0 +1,51 @@
+%union {
+    int num;
+    char str[256];
+}
+
+/* Tokens for instructions */
+%token MOV MOVL MOVQ ADD SUB INC DEC MUL IMUL DIV IDIV
+%token AND OR XOR NOT SHL SHR SAR
+%token JMP JE JZ JNE JNZ JL JG JLE JGE JA JB JAE JBE
+%token CALL RET PUSH POP
+%token CMP TEST LEA NOP CMPSB
+%token LOOP LOOPE LOOPNE STOSD STOSB SCASB MOVSB MOVSD MOVZX MOVSX
+%token AS IF VAR WHILE GOTO EXIT PRINT REPEAT SINGLE REVERSE LARROW RARROW GEQ LEQ NEQ EQ
+
+/* Directives and keywords */
+%token <str> BITS SECTION GLOBAL EXTERN EQU RESB RESW RESD RESQ
+
+/* Tokens for registers - 64-bit */
+%token RAX RBX RCX RDX RSI RDI RBP RSP
+%token R8 R9 R10 R11 R12 R13 R14 R15
+
+/* Tokens for registers - 32-bit */
+%token EAX EBX ECX EDX ESI EDI EBP ESP
+
+/* Tokens for registers - 16-bit */
+%token AX BX CX DX SI DI BP SP
+
+/* Tokens for registers - 8-bit */
+%token AL AH BL BH CL CH DL DH
+
+/* Size qualifiers */
+%token <str> BYTE WORD DWORD QWORD PTR
+%token <str> REPE REPNE REP
+
+/* Tokens for literals and punctuation */
+%token <num> NUMBER
+%token <str> LABEL STRING
+%token COMMA COLON NEWLINE
+%token <str> LBRACKET RBRACKET LPAREN RPAREN
+%token PLUS MINUS MULTIPLY DIVIDE
+
+/* Type declarations for nonterminals */
+%type <str> instruction zero_operand_mnem one_operand_mnem two_operand_mnem register label operand memory_operand
+%type <str> size_prefix prefix
+%type <str> directive
+%type <str> cond_op conditional cond_body
+%type <num> size_qualifier math_expr opt_reverse
+
+/* Operator precedence */
+%left PLUS MINUS
+%left MULTIPLY DIVIDE

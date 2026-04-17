@@ -1,0 +1,30 @@
+math_expr:
+    NUMBER
+    | LPAREN math_expr RPAREN      { $$ = $2; }
+    | math_expr PLUS math_expr     { $$ = $1 + $3; }
+    | math_expr MINUS math_expr    { $$ = $1 - $3; }
+    | math_expr DIVIDE math_expr   { $$ = $1 / $3; }
+    | math_expr MULTIPLY math_expr { $$ = $1 * $3; }
+    ;
+
+conditional:
+    LBRACKET cond_body RBRACKET
+    { strcpy($$, $2); }
+    ;
+
+cond_body:
+    register cond_op register
+    { snprintf($$, 256, "%s|%s|%s", $1, $2, $3); }
+    |
+    register cond_op NUMBER
+    { snprintf($$, 256, "%s|%s|%d", $1, $2, $3); }
+    ;
+
+cond_op:
+    RARROW   { strcpy($$, "jg"); }
+    | LARROW { strcpy($$, "jl"); }
+    | GEQ    { strcpy($$, "jge"); }
+    | LEQ    { strcpy($$, "jle"); }
+    | EQ     { strcpy($$, "je"); }
+    | NEQ    { strcpy($$, "jne"); }
+    ;

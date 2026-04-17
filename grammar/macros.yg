@@ -1,0 +1,28 @@
+macro:
+    EXIT NUMBER
+    { emit_exit($2); }
+    | PRINT math_expr
+    { emit_print($2); }
+    | IF conditional GOTO LABEL
+    { emit_if($2, $4); }
+    | WHILE conditional GOTO LABEL
+    { emit_while_goto($2, $4); }
+    | WHILE conditional REPEAT SINGLE LBRACKET instruction RBRACKET
+    { emit_while_single($2, $6); }
+    | push_macro
+    ;
+
+push_macro:
+    PUSH opt_reverse STRING AS BYTE
+    { emit_push_string_byte($3, $2); }
+    | PUSH opt_reverse STRING AS WORD
+    { emit_push_string_word($3, $2); }
+    | PUSH opt_reverse STRING AS DWORD
+    { emit_push_string_dword($3, $2); }
+    | PUSH STRING AS QWORD
+    { emit_push_string_qword($2); }
+    ;
+
+opt_reverse:          { $$ = 0; }
+    | REVERSE         { $$ = 1; }
+    ;
