@@ -1,37 +1,31 @@
 instruction:
     zero_operand_mnem
     {
-        strcpy(last_mnemonic, $1);
         strcpy($$, $1);
     }
     |
     prefix zero_operand_mnem
     {
-        strcpy(last_mnemonic, $2);
         snprintf($$, 256, "%s %s", $1, $2);
     }
     |
     one_operand_mnem operand
     {
-        strcpy(last_mnemonic, $1);
         snprintf($$, 256, "%s %s", $1, $2);
     }
     |
     one_operand_mnem
     {
-        strcpy(last_mnemonic, $1);
         strcpy($$, $1);
     }
     |
     two_operand_mnem operand COMMA operand
     {
-        strcpy(last_mnemonic, $1);
         snprintf($$, 256, "%s %s, %s", $1, $2, $4);
     }
     |
     prefix two_operand_mnem operand COMMA operand
     {
-        strcpy(last_mnemonic, $2);
         snprintf($$, 256, "%s %s %s, %s", $1, $2, $3, $5);
     }
     ;

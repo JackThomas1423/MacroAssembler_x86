@@ -13,16 +13,12 @@ macro:
     ;
 
 push_macro:
-    PUSH opt_reverse STRING AS BYTE
-    { emit_push_string_byte($3, $2); }
-    | PUSH opt_reverse STRING AS WORD
-    { emit_push_string_word($3, $2); }
-    | PUSH opt_reverse STRING AS DWORD
-    { emit_push_string_dword($3, $2); }
-    | PUSH STRING AS QWORD
-    { emit_push_string_qword($2); }
-    ;
-
-opt_reverse:          { $$ = 0; }
-    | REVERSE         { $$ = 1; }
+    PUSH stack_order complex_literal AS BYTE
+    { emit_push($3, 1, $2); }
+    | PUSH stack_order complex_literal AS WORD
+    { emit_push($3, 2, $2); }
+    | PUSH stack_order complex_literal AS DWORD
+    { emit_push($3, 4, $2); }
+    | PUSH stack_order complex_literal AS QWORD
+    { emit_push($3, 8, $2); }
     ;

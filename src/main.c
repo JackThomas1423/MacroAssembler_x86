@@ -12,8 +12,6 @@ void yyerror(const char *s) {
     fprintf(stderr, "\n");
     fprintf(stderr, "=== SYNTAX ERROR ===\n");
     fprintf(stderr, "Line %d: %s\n", lineno, s);
-    if (strlen(last_mnemonic) > 0)
-        fprintf(stderr, "Last recognized mnemonic: %s\n", last_mnemonic);
     fprintf(stderr, "\n");
 }
 

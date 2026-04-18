@@ -8,8 +8,7 @@ global _start
 
 _start:
     mov rax, 25
-    push 10
-    push reverse "Hello!" as DWORD
-    print 24
+    push back "Hello world! Testing? HELLO",10 as QWORD
+    print 32
 .skip:
     exit 0

@@ -10,7 +10,9 @@
 %token CALL RET PUSH POP
 %token CMP TEST LEA NOP CMPSB
 %token LOOP LOOPE LOOPNE STOSD STOSB SCASB MOVSB MOVSD MOVZX MOVSX
-%token AS IF VAR WHILE GOTO EXIT PRINT REPEAT SINGLE REVERSE LARROW RARROW GEQ LEQ NEQ EQ
+
+%token AS IF VAR WHILE GOTO EXIT PRINT FRONT BACK
+%token REPEAT SINGLE LARROW RARROW GEQ LEQ NEQ EQ
 
 /* Directives and keywords */
 %token <str> BITS SECTION GLOBAL EXTERN EQU RESB RESW RESD RESQ
@@ -43,8 +45,8 @@
 %type <str> instruction zero_operand_mnem one_operand_mnem two_operand_mnem register label operand memory_operand
 %type <str> size_prefix prefix
 %type <str> directive
-%type <str> cond_op conditional cond_body
-%type <num> size_qualifier math_expr opt_reverse
+%type <str> cond_op conditional cond_body complex_literal
+%type <num> size_qualifier math_expr stack_order
 
 /* Operator precedence */
 %left PLUS MINUS

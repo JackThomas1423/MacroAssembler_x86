@@ -118,11 +118,12 @@ if      { append_to_line(yytext); return IF;      }
 var     { append_to_line(yytext); return VAR;     }
 goto    { append_to_line(yytext); return GOTO;    }
 exit    { append_to_line(yytext); return EXIT;    }
+back    { append_to_line(yytext); return BACK;    }
 print   { append_to_line(yytext); return PRINT;   }
+front   { append_to_line(yytext); return FRONT;   }
 while   { append_to_line(yytext); return WHILE;   }
 repeat  { append_to_line(yytext); return REPEAT;  }
 single  { append_to_line(yytext); return SINGLE;  }
-reverse { append_to_line(yytext); return REVERSE; }
 
 rax|RAX|Rax|rAx|raX|RaX|rAx|RAx { append_to_line(yytext); return RAX; }
 rbx|RBX|Rbx|rBx|rbX|RbX|rBx|RBx { append_to_line(yytext); return RBX; }
@@ -177,7 +178,6 @@ dh|DH|Dh|dH { append_to_line(yytext); return DH; }
 '\\t'  { append_to_line(yytext); yylval.num = '\t'; return NUMBER; }
 '\\r'  { append_to_line(yytext); yylval.num = '\r'; return NUMBER; }
 '\\\\'  { append_to_line(yytext); yylval.num = '\\'; return NUMBER; }
-'\''   { append_to_line(yytext); yylval.num = '\''; return NUMBER; }
 
 ,   { append_to_line(yytext); return COMMA;    }
 :   { append_to_line(yytext); return COLON;    }
