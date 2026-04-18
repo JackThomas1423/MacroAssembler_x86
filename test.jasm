@@ -1,0 +1,12 @@
+[BITS 64]
+
+section .text
+
+global _start
+
+_start:
+    push back "Hello world!", 10, "me again!", 10 as BYTE
+    swap BYTE
+    print 23
+.skip:
+    exit 0

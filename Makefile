@@ -6,7 +6,6 @@ C_LEX     = x86.lex.c
 C_YACC    = x86.tab.c
 C_SRCS   := $(wildcard $(SRC)/*.c)
 
-
 GRAMMAR_SRCS := $(wildcard $(GRAMMAR)/*.yg) $(wildcard $(GRAMMAR)/*.yh)
 GEN_SRCS      = $(BUILD)/$(C_LEX) $(BUILD)/$(C_YACC)
 ALL_SRCS      = $(GEN_SRCS) $(C_SRCS)
@@ -28,7 +27,7 @@ $(BUILD)/$(C_YACC): x86.yacc $(GRAMMAR_SRCS)
 
 compile: x86_parser
 	rm -f $(BUILD)/output.asm $(BUILD)/output.o
-	./parse test.asm >> $(BUILD)/output.asm
+	./parse test.jasm >> $(BUILD)/output.asm
 	nasm -f elf64 $(BUILD)/output.asm -o $(BUILD)/output.o
 	ld $(BUILD)/output.o -o output
 

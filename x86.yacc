@@ -22,6 +22,7 @@ extern char *flush_line(void);
 #include "grammar/instructions.yg"
 #include "grammar/operands.yg"
 #include "grammar/macros.yg"
+#include "grammar/registers.yg"
 #include "grammar/conditionals.yg"
 
 %%

@@ -11,8 +11,9 @@
 %token CMP TEST LEA NOP CMPSB
 %token LOOP LOOPE LOOPNE STOSD STOSB SCASB MOVSB MOVSD MOVZX MOVSX
 
-%token AS IF VAR WHILE GOTO EXIT PRINT FRONT BACK
-%token REPEAT SINGLE LARROW RARROW GEQ LEQ NEQ EQ
+%token AS IF VAR WHILE GOTO EXIT PRINT FRONT BACK SWAP
+%token REPEAT SINGLE
+%token LARROW RARROW GEQ LEQ NEQ EQ
 
 /* Directives and keywords */
 %token <str> BITS SECTION GLOBAL EXTERN EQU RESB RESW RESD RESQ
@@ -42,8 +43,9 @@
 %token PLUS MINUS MULTIPLY DIVIDE
 
 /* Type declarations for nonterminals */
-%type <str> instruction zero_operand_mnem one_operand_mnem two_operand_mnem register label operand memory_operand
+%type <str> instruction zero_operand_mnem one_operand_mnem two_operand_mnem label operand memory_operand
 %type <str> size_prefix prefix
+%type <str> register register_64 register_32 register_16 register_8
 %type <str> directive
 %type <str> cond_op conditional cond_body complex_literal
 %type <num> size_qualifier math_expr stack_order
