@@ -1,0 +1,48 @@
+function_wrapper:
+    FUNC COLON func_wh LBRACKET func_wh func_stack_frame_res_block func_wh RBRACKET
+    {
+        printf("%s:\n", $1);
+        printf("    push rbp\n");
+        printf("    mov rbp, rsp\n");
+        printf("    sub rsp, %d\n", $6);
+    }
+    program LEAVE
+    {
+        printf("    mov rsp, rbp\n");
+        printf("    pop rbp\n");
+        printf("    ret\n");   
+    }
+    | FUNC COLON func_wh
+    {
+        printf("%s:\n", $1);
+        printf("    push rbp\n");
+        printf("    mov rbp, rsp\n");
+    }
+    program LEAVE
+    {
+        printf("    mov rsp, rbp\n");
+        printf("    pop rbp\n");
+        printf("    ret\n");   
+    }
+    ;
+
+func_wh:
+    | func_wh NEWLINE
+    ;
+
+func_stack_frame_res_block:
+    func_res_member
+    | func_stack_frame_res_block COMMA func_wh func_stack_frame_res_block
+    { $$ = $1 + $4; }
+    ;
+
+func_res_member:
+    LABEL COLON RESB NUMBER
+    { $$ = $4; }
+    | LABEL COLON RESW NUMBER
+    { $$ = $4 * 2; }
+    | LABEL COLON RESD NUMBER
+    { $$ = $4 * 4; }
+    | LABEL COLON RESQ NUMBER
+    { $$ = $4 * 8; }
+    ;

@@ -5,8 +5,14 @@ section .text
 global _start
 
 _start:
+    push back "Function test works!", 10 as BYTE
+    call test_function
+    print 21
+    exit 0
+
+@test_function: ;[ buffer: resb 23, index: resb 1 ]
     push back "Hello world!", 10, "me again!", 10 as BYTE
     swap BYTE
     print 23
-.skip:
-    exit 0
+
+    leave

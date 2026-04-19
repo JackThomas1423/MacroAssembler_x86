@@ -9,6 +9,7 @@ int yylex(void);
 void yyerror(const char *s);
 extern int lineno;
 extern char *flush_line(void);
+
 %}
 
 #include "grammar/tokens.yh"
@@ -18,6 +19,7 @@ extern char *flush_line(void);
 %%
 
 #include "grammar/program.yg"
+#include "grammar/function.yg"
 #include "grammar/directives.yg"
 #include "grammar/instructions.yg"
 #include "grammar/operands.yg"

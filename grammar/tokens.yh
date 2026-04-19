@@ -12,7 +12,7 @@
 %token LOOP LOOPE LOOPNE STOSD STOSB SCASB MOVSB MOVSD MOVZX MOVSX
 
 %token AS IF VAR WHILE GOTO EXIT PRINT FRONT BACK SWAP
-%token REPEAT SINGLE
+%token REPEAT SINGLE LEAVE
 %token LARROW RARROW GEQ LEQ NEQ EQ
 
 /* Directives and keywords */
@@ -37,7 +37,7 @@
 
 /* Tokens for literals and punctuation */
 %token <num> NUMBER
-%token <str> LABEL STRING
+%token <str> FUNC LABEL STRING
 %token COMMA COLON NEWLINE
 %token <str> LBRACKET RBRACKET LPAREN RPAREN
 %token PLUS MINUS MULTIPLY DIVIDE
@@ -49,6 +49,9 @@
 %type <str> directive
 %type <str> cond_op conditional cond_body complex_literal
 %type <num> size_qualifier math_expr stack_order
+
+%type <str> function_wrapper
+%type <num> func_stack_frame_res_block func_res_member
 
 /* Operator precedence */
 %left PLUS MINUS

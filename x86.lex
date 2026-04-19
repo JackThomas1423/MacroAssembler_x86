@@ -94,7 +94,7 @@ movsd|MOVSD|Movsd|mOvsd|moVsd|moVSd|movSD|MOvsd|mOVsd|mOVSD { append_to_line(yyt
 movzx|MOVZX|Movzx|mOvzx|moVzx|movZx|movzX|MOvzx|mOVzx|mOVZx|mOVzX { append_to_line(yytext); return MOVZX; }
 movsx|MOVSX|Movsx|mOvsx|moVsx|movSx|movsX|MOvsx|mOVsx|mOVSx|mOVsx { append_to_line(yytext); return MOVSX; }
 
-byte|BYTE|Byte|bYte|byTe|bytE|BYte|bYTe|BYTE { append_to_line(yytext); return BYTE; }
+byte|BYTE|Byte|bYte|byTe|bytE|BYte|bYTe|BYTE  { append_to_line(yytext); return BYTE; }
 word|WORD|Word|wOrd|woRd|worD|WOrd|wORd|WORD  { append_to_line(yytext); return WORD; }
 dword|DWORD|Dword|dWord|dwOrd|dwoRd           { append_to_line(yytext); return DWORD; }
 qword|QWORD|Qword|qWord|qwOrd|qwoRd           { append_to_line(yytext); return QWORD; }
@@ -123,6 +123,7 @@ back    { append_to_line(yytext); return BACK;    }
 print   { append_to_line(yytext); return PRINT;   }
 front   { append_to_line(yytext); return FRONT;   }
 while   { append_to_line(yytext); return WHILE;   }
+leave   { append_to_line(yytext); return LEAVE;   }
 repeat  { append_to_line(yytext); return REPEAT;  }
 single  { append_to_line(yytext); return SINGLE;  }
 
@@ -202,6 +203,15 @@ dh|DH|Dh|dH { append_to_line(yytext); return DH; }
     strncpy(yylval.str, yytext, 31);
     yylval.str[31] = '\0';
     return LABEL;
+}
+
+\@[a-zA-Z_][a-zA-Z0-9_]*|[a-zA-Z_][a-zA-Z0-9_]* {
+    append_to_line(yytext);
+    int len = strlen(yytext) - 1;
+    if (len > 255) len = 255;
+    strncpy(yylval.str, yytext + 1, len);
+    yylval.str[len] = '\0';
+    return FUNC;
 }
 
 .   { append_to_line(yytext); }
