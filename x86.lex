@@ -127,6 +127,8 @@ leave   { append_to_line(yytext); return LEAVE;   }
 repeat  { append_to_line(yytext); return REPEAT;  }
 single  { append_to_line(yytext); return SINGLE;  }
 
+syscall { append_to_line(yytext); return SYSCALL; }
+
 rax|RAX|Rax|rAx|raX|RaX|rAx|RAx { append_to_line(yytext); return RAX; }
 rbx|RBX|Rbx|rBx|rbX|RbX|rBx|RBx { append_to_line(yytext); return RBX; }
 rcx|RCX|Rcx|rCx|rcX|RcX|rCx|RCx { append_to_line(yytext); return RCX; }

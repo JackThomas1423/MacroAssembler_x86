@@ -47,6 +47,7 @@ zero_operand_mnem:
     | SCASB  { strcpy($$, "scasb"); }
     | MOVSB  { strcpy($$, "movsb"); }
     | MOVSD  { strcpy($$, "movsd"); }
+    | SYSCALL  { strcpy($$, "syscall"); }
     ;
 
 one_operand_mnem:

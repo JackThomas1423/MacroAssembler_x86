@@ -1,10 +1,15 @@
 function_wrapper:
     FUNC COLON func_wh LBRACKET func_wh func_stack_frame_res_block func_wh RBRACKET
     {
+        struct stack_local_chain* slc = $6;
+        struct function_stack_locals* fsc = make_function_scope($1, $6);
+
+        unsigned int chain_size = get_local_chain_size(slc);
+
         printf("%s:\n", $1);
         printf("    push rbp\n");
         printf("    mov rbp, rsp\n");
-        printf("    sub rsp, %d\n", $6);
+        printf("    sub rsp, %d\n", chain_size);
     }
     program LEAVE
     {
@@ -32,17 +37,23 @@ func_wh:
 
 func_stack_frame_res_block:
     func_res_member
+    { $$ = $1; }
     | func_stack_frame_res_block COMMA func_wh func_stack_frame_res_block
-    { $$ = $1 + $4; }
+    {
+        struct stack_local_chain* a = $1;
+        struct stack_local_chain* b = $4;
+        a->next = b;
+        $$ = a;
+    }
     ;
 
 func_res_member:
     LABEL COLON RESB NUMBER
-    { $$ = $4; }
+    { $$ = make_local_chain_node($1, $4, NULL); }
     | LABEL COLON RESW NUMBER
-    { $$ = $4 * 2; }
+    { $$ = make_local_chain_node($1, $4 * 2, NULL); }
     | LABEL COLON RESD NUMBER
-    { $$ = $4 * 4; }
+    { $$ = make_local_chain_node($1, $4 * 4, NULL); }
     | LABEL COLON RESQ NUMBER
-    { $$ = $4 * 8; }
+    { $$ = make_local_chain_node($1, $4 * 8, NULL); }
     ;

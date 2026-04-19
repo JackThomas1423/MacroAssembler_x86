@@ -17,6 +17,9 @@ macro:
     | PUSH stack_order complex_literal AS BYTE
     { emit_push($3, $2); }
 
+    | PUSH LABEL AS PTR
+    { emit_push_label($2); }
+
     | SWAP size_prefix
     { emit_swap($2); }
 

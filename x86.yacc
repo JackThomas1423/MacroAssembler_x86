@@ -4,6 +4,7 @@
 #include <string.h>
 #include "src/globals.h"
 #include "src/macros.h"
+#include "src/function.h"
 
 int yylex(void);
 void yyerror(const char *s);

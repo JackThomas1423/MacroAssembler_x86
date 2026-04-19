@@ -8,6 +8,8 @@ void emit_while_goto(const char *cond, const char *label);
 void emit_while_single(const char *cond, const char *instr);
 
 void emit_push(const char *str, int order);
+void emit_push_label(const char *str);
+
 void emit_pop_to_register(const char *reg, const char *size_prefix);
 void emit_pop_bytes(const char *size_prefix);
 

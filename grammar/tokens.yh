@@ -1,6 +1,7 @@
 %union {
     int num;
     char str[256];
+    struct stack_local_chain* slc;
 }
 
 /* Tokens for instructions */
@@ -10,6 +11,7 @@
 %token CALL RET PUSH POP
 %token CMP TEST LEA NOP CMPSB
 %token LOOP LOOPE LOOPNE STOSD STOSB SCASB MOVSB MOVSD MOVZX MOVSX
+%token SYSCALL
 
 %token AS IF VAR WHILE GOTO EXIT PRINT FRONT BACK SWAP
 %token REPEAT SINGLE LEAVE
@@ -51,7 +53,7 @@
 %type <num> size_qualifier math_expr stack_order
 
 %type <str> function_wrapper
-%type <num> func_stack_frame_res_block func_res_member
+%type <slc> func_stack_frame_res_block func_res_member
 
 /* Operator precedence */
 %left PLUS MINUS

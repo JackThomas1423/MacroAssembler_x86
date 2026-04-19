@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "macros.h"
 #include "globals.h"
+#include "function.h"
 
 void emit_exit(int code) {
     printf("    mov rax, 60\n");
@@ -60,6 +61,20 @@ void emit_push(const char *str, int order) {
             printf("    mov BYTE [rsp + %d], %s\n", rsp_offset + 1, hex_str);
         }
     }
+}
+
+void emit_push_label(const char *str) {
+    struct function_stack_locals* scope = function_scopes[funcion_stack_locals_index];
+    unsigned int total_space = get_local_chain_size(scope->chain);
+    unsigned int offset = 0;
+    struct stack_local_chain* ptr = scope->chain;
+    do {
+        offset += ptr->size;
+        if (strcmp(str, ptr->local_id) == 0) break;
+        if (ptr->next == NULL) break;
+        ptr = ptr->next;
+    } while(1);
+    printf("    push QWORD [rbp-%d]\n", total_space - offset);
 }
 
 void emit_pop_to_register(const char *reg, const char* size_prefix) {
