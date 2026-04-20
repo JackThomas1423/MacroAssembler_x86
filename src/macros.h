@@ -14,5 +14,6 @@ void emit_pop_to_register(const char *reg, const char *size_prefix);
 void emit_pop_bytes(const char *size_prefix);
 
 void emit_swap(const char *size_prefix);
+void emit_dup(const char *size_prefix);
 
 #endif /* MACROS_H */

@@ -6,7 +6,7 @@ C_LEX     = x86.lex.c
 C_YACC    = x86.tab.c
 C_SRCS   := $(wildcard $(SRC)/*.c)
 
-GRAMMAR_SRCS := $(wildcard $(GRAMMAR)/*.yg) $(wildcard $(GRAMMAR)/*.yh)
+GRAMMAR_SRCS := $(wildcard $(GRAMMAR)/*.yacc)
 GEN_SRCS      = $(BUILD)/$(C_LEX) $(BUILD)/$(C_YACC)
 ALL_SRCS      = $(GEN_SRCS) $(C_SRCS)
 

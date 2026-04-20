@@ -23,6 +23,9 @@ macro:
     | SWAP size_prefix
     { emit_swap($2); }
 
+    | DUP AS size_prefix
+    { emit_dup($3); }
+
     | pop_macro_variations
 
     ;

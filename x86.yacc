@@ -13,19 +13,19 @@ extern char *flush_line(void);
 
 %}
 
-#include "grammar/tokens.yh"
+#include "grammar/tokens.yacc"
 
 %start program
 
 %%
 
-#include "grammar/program.yg"
-#include "grammar/function.yg"
-#include "grammar/directives.yg"
-#include "grammar/instructions.yg"
-#include "grammar/operands.yg"
-#include "grammar/macros.yg"
-#include "grammar/registers.yg"
-#include "grammar/conditionals.yg"
+#include "grammar/program.yacc"
+#include "grammar/function.yacc"
+#include "grammar/directives.yacc"
+#include "grammar/instructions.yacc"
+#include "grammar/operands.yacc"
+#include "grammar/macros.yacc"
+#include "grammar/registers.yacc"
+#include "grammar/conditionals.yacc"
 
 %%

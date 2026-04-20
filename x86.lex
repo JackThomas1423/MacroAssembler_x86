@@ -115,6 +115,7 @@ rep|REP|Rep|rEp|reP|REp|rEP { append_to_line(yytext); return REP; }
 
 as      { append_to_line(yytext); return AS;      }
 if      { append_to_line(yytext); return IF;      }
+dup     { append_to_line(yytext); return DUP;     }
 var     { append_to_line(yytext); return VAR;     }
 swap    { append_to_line(yytext); return SWAP;    }
 load    { append_to_line(yytext); return LOAD;    }

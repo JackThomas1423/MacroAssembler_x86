@@ -110,3 +110,19 @@ void emit_swap(const char *size_prefix) {
     printf("    mov %s [rsp], %s\n", size_prefix, reg2);
     printf("    mov %s [rsp + %d], %s\n", size_prefix, bytes, reg1);
 }
+
+void emit_dup(const char* size_prefix) {
+    unsigned int bytes = size_prefix_to_bytes(size_prefix);
+    // Make registers resize based on size prefix
+    const char* reg = registers_64[0]; // rax
+    if (bytes == 1) {
+        reg = registers_8[0]; // al
+    } else if (bytes == 2) {
+        reg = registers_16[0]; // ax
+    } else if (bytes == 4) {
+        reg = registers_32[0]; // eax
+    }
+    printf("    mov %s, %s [rsp]\n", reg, size_prefix);
+    printf("    sub rsp, %d\n", bytes);
+    printf("    mov %s [rsp], %s\n", size_prefix, reg);
+}

@@ -10,7 +10,7 @@ program:
     { printf("%s\n", flush_line()); }
     |
     program function_wrapper opt_newline
-    { flush_line(); }
+    { flush_line(); } 
     |
     program label opt_newline
     { printf("%s\n", flush_line()); }
