@@ -13,4 +13,14 @@ _start:
 @test_function: [ buffer: resb 12, other: resb 12 ]
     push back "Hello world!", 10 as BYTE
     push buffer as PTR
+    pop rbx as PTR
+    mov BYTE [rbx], 'a'
+    mov BYTE [rbx+1], 'b'
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, rbx
+    mov rdx, 3
+    syscall
+
     leave

@@ -63,18 +63,19 @@ void emit_push(const char *str, int order) {
     }
 }
 
-void emit_push_label(const char *str) {
+void emit_push_stack_local(const char *str) {
     struct function_stack_locals* scope = function_scopes[funcion_stack_locals_index];
     unsigned int total_space = get_local_chain_size(scope->chain);
     unsigned int offset = 0;
     struct stack_local_chain* ptr = scope->chain;
     do {
-        offset += ptr->size;
         if (strcmp(str, ptr->local_id) == 0) break;
+        offset += ptr->size;
         if (ptr->next == NULL) break;
         ptr = ptr->next;
     } while(1);
-    printf("    push QWORD [rbp-%d]\n", total_space - offset);
+    printf("    lea rax, QWORD [rbp-%d]\n", total_space - offset);
+    printf("    push rax\n");
 }
 
 void emit_pop_to_register(const char *reg, const char* size_prefix) {

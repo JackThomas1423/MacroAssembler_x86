@@ -117,6 +117,7 @@ as      { append_to_line(yytext); return AS;      }
 if      { append_to_line(yytext); return IF;      }
 var     { append_to_line(yytext); return VAR;     }
 swap    { append_to_line(yytext); return SWAP;    }
+load    { append_to_line(yytext); return LOAD;    }
 goto    { append_to_line(yytext); return GOTO;    }
 exit    { append_to_line(yytext); return EXIT;    }
 back    { append_to_line(yytext); return BACK;    }
