@@ -15,6 +15,15 @@ complex_literal:
     { snprintf($$, 256, "%s%s", $1, $3); }
     ;
 
+complex_literal_raw:
+    STRING
+    { snprintf($$, 256, "\"%s\"", $1); }
+    | NUMBER
+    { snprintf($$, 256, "%d", $1); }
+    | complex_literal_raw COMMA complex_literal_raw
+    { snprintf($$, 256, "%s, %s", $1, $3); }
+    ;
+
 conditional:
     LBRACKET cond_body RBRACKET
     { strcpy($$, $2); }
@@ -35,9 +44,4 @@ cond_op:
     | LEQ    { strcpy($$, "jle"); }
     | EQ     { strcpy($$, "je"); }
     | NEQ    { strcpy($$, "jne"); }
-    ;
-
-stack_order:
-    FRONT  { $$ = 0; }
-    | BACK { $$ = 1; }
     ;

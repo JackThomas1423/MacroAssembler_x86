@@ -13,12 +13,14 @@
 %token LOOP LOOPE LOOPNE STOSD STOSB SCASB MOVSB MOVSD MOVZX MOVSX
 %token SYSCALL
 
-%token AS IF VAR WHILE GOTO EXIT PRINT FRONT BACK SWAP
-%token REPEAT SINGLE LEAVE LOAD DUP
+%token AS IF VAR DUP PAD MEM
+%token GOTO EXIT PRINT SWAP LOAD FREE
+%token REPEAT SINGLE LEAVE WHILE REVERSE
 %token LARROW RARROW GEQ LEQ NEQ EQ
 
 /* Directives and keywords */
-%token <str> BITS SECTION GLOBAL EXTERN EQU RESB RESW RESD RESQ
+%token <str> BITS SECTION GLOBAL EXTERN EQU
+%token <str> RESB RESW RESD RESQ DB DW DD DQ
 
 /* Tokens for registers - 64-bit */
 %token RAX RBX RCX RDX RSI RDI RBP RSP
@@ -49,8 +51,8 @@
 %type <str> size_prefix prefix
 %type <str> register register_64 register_32 register_16 register_8
 %type <str> directive
-%type <str> cond_op conditional cond_body complex_literal
-%type <num> size_qualifier math_expr stack_order
+%type <str> cond_op conditional cond_body complex_literal complex_literal_raw
+%type <num> size_qualifier math_expr
 
 %type <str> function_wrapper
 %type <slc> func_stack_frame_res_block func_res_member

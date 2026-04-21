@@ -5,12 +5,16 @@ section .text
 global _start
 
 _start:
-    push back "Function test works!", 10 as BYTE
-    call test_function
-    print 21
-    exit 0
+    push reverse "Test" as BYTE
+    mem 4 as BYTE
+    dup as QWORD
 
-@test_function: [ buffer: resb 12, other: resb 12 ]
-    push back "Hello world!", 10 as BYTE
-    print 12
-    leave
+    pop rbx
+    mov BYTE [rbx],   'a'
+    mov BYTE [rbx+1], 'b'
+    mov BYTE [rbx+2], 'c'
+    mov BYTE [rbx+3], 'd'
+
+    print 4 as PTR
+    print 4
+    exit 0

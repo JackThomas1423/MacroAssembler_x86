@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "macros.h"
 #include "globals.h"
 #include "function.h"
@@ -11,10 +12,11 @@ void emit_exit(int code) {
     printf("    syscall\n");
 }
 
-void emit_print(int size) {
+void emit_print(int size, bool as_ptr) {
+    if (as_ptr) { printf("    pop rsi\n"); }
+    else { printf("    mov rsi, rsp\n"); }
     printf("    mov rax, 1\n");
     printf("    mov rdi, 1\n");
-    printf("    mov rsi, rsp\n");
     printf("    mov rdx, %d\n", size);
     printf("    syscall\n");
 }
@@ -45,22 +47,47 @@ void emit_while_single(const char *cond, const char *instr) {
     printf("    %s\n", instr);
 }
 
-void emit_push(const char *str, int order) {
-    int len = strlen(str);
-    printf("    sub rsp, %d\n", len);
-    if (order == 0) {
-        for (int i = 0; i < len; ++i) {
-            char* hex_str = ascii_str_to_hex_str(str + i, 1);
-            int rsp_offset = len - (i + 1);
-            printf("    mov BYTE [rsp + %d], %s\n", rsp_offset, hex_str);
-        }
-    } else {
-        for (int i = (int)strlen(str) - 1; i >= 0; i -= 1) {
-            char* hex_str = ascii_str_to_hex_str(str + i, 1);
-            int rsp_offset = len - ((strlen(str) - i) + 1);
-            printf("    mov BYTE [rsp + %d], %s\n", rsp_offset + 1, hex_str);
-        }
+void emit_push_literal(const char *str, const char *size_prefix, unsigned int padding, bool reversed) {
+    char* str_buffer = (char*)str;
+    if (reversed) {
+        int length = strlen(str);
+        str_buffer = malloc(length);
+        for (int i = 0; i < length; ++i) str_buffer[i] = str[length - (i + 1)];
     }
+
+    unsigned int size = size_prefix_to_bytes(size_prefix);
+    int is_qword = (strcmp(size_prefix, "QWORD") == 0);
+    const char* effective_prefix = is_qword ? "DWORD" : size_prefix;
+    if (is_qword) size = 4;
+
+    int len = strlen(str_buffer);
+    int stride = size + padding;
+    int num_groups = (len + size - 1) / size;
+    // for QWORD, padding only applies every two groups
+    int padded_pairs = is_qword ? (num_groups + 1) / 2 : num_groups;
+    int total_bytes = (num_groups * size) + (padded_pairs * padding);
+
+    printf("    sub rsp, %d\n", total_bytes);
+
+    int byte_pos = 0;
+    for (int g = 0; g < num_groups; g++) {
+        int apply_padding = is_qword ? (g % 2 == 1) : 1;
+        int slot_size = size + (apply_padding ? padding : 0);
+        int rsp_offset = total_bytes - byte_pos - slot_size;
+
+        char *hex_str = ascii_str_to_hex_str(str_buffer + (g * size), size);
+        printf("    mov %s [rsp + %d], %s\n", effective_prefix, rsp_offset + (apply_padding ? padding : 0), hex_str);
+        free(hex_str);
+
+        if (apply_padding) {
+            for (unsigned int p = 0; p < padding; p++)
+                printf("    mov BYTE [rsp + %d], 0\n", rsp_offset + p);
+        }
+
+        byte_pos += slot_size;
+    }
+
+    if (reversed) free(str_buffer);
 }
 
 void emit_push_stack_local(const char *str) {
@@ -89,6 +116,25 @@ void emit_pop_bytes(const char *size_prefix) {
     printf("    add rsp, %d\n", bytes);
 }
 
+void emit_mem(unsigned int bytes) {
+    printf("    mov rax, 9\n");
+    printf("    xor rdi, rdi\n");
+    printf("    mov rsi, %d\n", bytes);
+    printf("    mov rdx, 3\n");
+    printf("    mov r10, 34\n");
+    printf("    mov r8, -1\n");
+    printf("    xor r9, r9\n");
+    printf("    syscall\n");
+    printf("    push rax\n");
+}
+
+void emit_free(unsigned int bytes) {
+    printf("    mov rax, 11\n");
+    printf("    mov rsi, 4096\n");
+    printf("    pop rdi\n");
+    printf("    syscall\n");
+}
+
 // swaps the first N bytes (based on size prefix) of the stack around
 void emit_swap(const char *size_prefix) {
     unsigned int bytes = size_prefix_to_bytes(size_prefix);
@@ -113,7 +159,6 @@ void emit_swap(const char *size_prefix) {
 
 void emit_dup(const char* size_prefix) {
     unsigned int bytes = size_prefix_to_bytes(size_prefix);
-    // Make registers resize based on size prefix
     const char* reg = registers_64[0]; // rax
     if (bytes == 1) {
         reg = registers_8[0]; // al

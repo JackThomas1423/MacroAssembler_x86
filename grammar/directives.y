@@ -15,4 +15,8 @@ directive:
     | LABEL RESW NUMBER
     | LABEL RESD NUMBER
     | LABEL RESQ NUMBER
+    | LABEL DB complex_literal
+    | LABEL DW complex_literal
+    | LABEL DD complex_literal
+    | LABEL DQ complex_literal
     ;

@@ -24,6 +24,7 @@ unsigned int size_prefix_to_bytes(const char* size_prefix) {
     if (strcmp(size_prefix, "WORD")  == 0) return 2;
     if (strcmp(size_prefix, "DWORD") == 0) return 4;
     if (strcmp(size_prefix, "QWORD") == 0) return 8;
+    if (strcmp(size_prefix, "PTR")   == 0) return 8;
     fprintf(stderr, "Error: Invalid size prefix '%s'\n", size_prefix);
     return 0;
 }
@@ -32,18 +33,22 @@ unsigned int size_prefix_to_bytes(const char* size_prefix) {
 // For example, "AB" would become "0x4142"
 // Note: The returned string is a static buffer, it will be overwritten on subsequent calls
 char* ascii_str_to_hex_str(const char* str, unsigned int count) {
-    static char hex_str[256];
-    hex_str[0] = '\0'; // Initialize the string
+    // "0x" + 2 hex chars per byte + null terminator
+    size_t buf_size = 2 + (count * 2) + 1;
+    char* hex_str = malloc(buf_size);
+    if (hex_str == NULL) {
+        fprintf(stderr, "Error: malloc failed in ascii_str_to_hex_str\n");
+        return NULL;
+    }
 
-    strcat(hex_str, "0x"); // Add hex prefix
+    hex_str[0] = '0';
+    hex_str[1] = 'x';
     char* ptr = hex_str + 2;
     for (size_t i = 0; i < count; i++) {
-        char hex_byte[3]; // 2 hex + null terminator
-        sprintf(hex_byte, "%02X", (unsigned char)str[i]);
-        strcat(ptr, hex_byte);
+        sprintf(ptr, "%02X", (unsigned char)str[i]);
         ptr += 2;
     }
-    ptr[0] = '\0';
+    *ptr = '\0';
 
     return hex_str;
 }
