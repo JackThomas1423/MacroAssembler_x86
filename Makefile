@@ -1,35 +1,30 @@
-BUILD   = build
-GRAMMAR = grammar
-SRC     = src
+CC        = gcc
+CFLAGS    = -Wno-format-truncation -Wall -Wextra -g
 
-C_LEX     = x86.lex.c
-C_YACC    = x86.tab.c
-C_SRCS   := $(wildcard $(SRC)/*.c)
+BISON_C   = jmal.tab.c
+BISON_H   = jmal.tab.h
+FLEX_C    = jmal.lex.c
 
-GRAMMAR_SRCS := $(wildcard $(GRAMMAR)/*.y)
-GEN_SRCS      = $(BUILD)/$(C_LEX) $(BUILD)/$(C_YACC)
-ALL_SRCS      = $(GEN_SRCS) $(C_SRCS)
+TARGET    = jmal
+BUILD_DIR = build
 
-all: $(BUILD) x86_parser
+TARGET_SRCS = $(addprefix $(BUILD_DIR)/, $(BISON_C) $(FLEX_C))
 
-$(BUILD):
-	mkdir -p $(BUILD)
+all: $(BUILD_DIR) $(TARGET)
 
-x86_parser: $(BUILD) $(ALL_SRCS)
-	gcc -Wno-format-truncation -I$(SRC) -o parse $(ALL_SRCS) -ll
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-$(BUILD)/$(C_LEX): x86.l
-	lex -o $(BUILD)/$(C_LEX) x86.l
+$(TARGET): main.c $(TARGET_SRCS)
+	$(CC) $(CFLAGS) -o $@ $^ -lfl
 
-$(BUILD)/$(C_YACC): x86.y $(GRAMMAR_SRCS)
-	cpp -x c -P x86.y -o $(BUILD)/x86.preprocessed.y
-	yacc -d -o $(BUILD)/$(C_YACC) $(BUILD)/x86.preprocessed.y
+$(BUILD_DIR)/$(BISON_C) $(BUILD_DIR)/$(BISON_H): jmal.y
+	bison -o $@ -d jmal.y
 
-compile: x86_parser
-	rm -f $(BUILD)/output.asm $(BUILD)/output.o
-	./parse test.jasm >> $(BUILD)/output.asm
-	nasm -f elf64 $(BUILD)/output.asm -o $(BUILD)/output.o
-	ld $(BUILD)/output.o -o output
+$(BUILD_DIR)/$(FLEX_C): jmal.l $(BUILD_DIR)/$(BISON_H)
+	flex -o $@ jmal.l
 
 clean:
-	rm -rf $(BUILD) parse output
+	rm -rf $(BUILD_DIR)
+
+.PHONY: all lex clean
