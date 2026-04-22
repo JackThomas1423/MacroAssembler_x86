@@ -1,13 +1,15 @@
 %define.table my_table
-    r1 [register, string]
-    r2 [register, address]
-%end
+    rule1: [register, string]
+    rule2: [register, address]
+%undef
 
 %define.table my_other_table from my_table
-    r2 [register, register]
-%end
+    rule2: [register, register]
+%undef
 
-%type my_type : string, number, register
+%type my_type: string | number | register
+
+%define.static my_string "This is my string!"
 
 %use my_table
 %macro.strict mov 2
@@ -30,10 +32,9 @@
     %arg %2 : string, number, register
     %arg %3 : string, number, register
 
-    %argc as %count
-
-    %rep %arg %count
-        push %arg
+    %rep %0
+        push %1
+        %rotate 1
     %endrep
 %endmacro
 
