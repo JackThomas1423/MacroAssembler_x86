@@ -1,8 +1,0 @@
-; How to call
-call test_function
-
-; How to declare
-@test_function: [ buffer: resb 12, other: resb 12 ]
-    push back "Hello world!", 10 as BYTE
-    print 13
-    leave
