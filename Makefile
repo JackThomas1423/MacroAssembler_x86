@@ -8,14 +8,14 @@ FLEX_C    = jmal.lex.c
 TARGET    = jmal
 BUILD_DIR = build
 
-TARGET_SRCS = $(addprefix $(BUILD_DIR)/, $(BISON_C) $(FLEX_C))
+TARGET_SRCS = main.c $(addprefix $(BUILD_DIR)/, $(BISON_C) $(FLEX_C))
 
 all: $(BUILD_DIR) $(TARGET)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(TARGET): main.c $(TARGET_SRCS)
+$(TARGET): $(TARGET_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ -lfl
 
 $(BUILD_DIR)/$(BISON_C) $(BUILD_DIR)/$(BISON_H): jmal.y

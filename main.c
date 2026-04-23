@@ -1,24 +1,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "build/jmal.tab.h"
+#include "jmal_ast.h"
 
 extern FILE *yyin;
 
+JmalProgram *jmal_program = NULL;
+
 int main(int argc, char **argv)
 {
-    if (argc > 1) {
-        FILE *f = fopen(argv[1], "r");
+    const char *filename = argc > 1 ? argv[1] : NULL;
+
+    jmal_program = jmal_program_new(filename);
+
+    if (filename) {
+        FILE *f = fopen(filename, "r");
         if (!f) {
-            perror(argv[1]);
+            perror(filename);
+            jmal_program_free(jmal_program);
             return 1;
         }
         yyin = f;
     }
 
-    int result = yyparse();   /* 0 = success, 1 = parse error */
+    yyparse();
 
     if (yyin && yyin != stdin)
         fclose(yyin);
 
-    return result;
+    jmal_program_dump(jmal_program);
+
+    jmal_program_free(jmal_program);
+
+    return 0;
 }

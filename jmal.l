@@ -94,8 +94,6 @@ ARG_REF     "%"[0-9]+
      *  Keywords inside directives                               *
      * ────────────────────────────────────────────────────────── */
 
-"from"              { return KW_FROM; }
-
 "register"          { return TYPE_REGISTER;  }
 "string"            { return TYPE_STRING;    }
 "number"            { return TYPE_NUMBER;    }
@@ -174,36 +172,3 @@ ARG_REF     "%"[0-9]+
                     }
 
 %%
-
-/*
- * Optional standalone test driver.
- * Compile with -DJMAL_TEST_LEXER to get a token dump.
- */
-#ifdef JMAL_TEST_LEXER
-int main(int argc, char **argv)
-{
-    if (argc > 1) {
-        FILE *f = fopen(argv[1], "r");
-        if (!f) { perror(argv[1]); return 1; }
-        yyin = f;
-    }
-
-    int tok;
-    while ((tok = yylex()) != 0) {
-        printf("line %2d  tok %3d", yylineno, tok);
-        switch (tok) {
-            case TOK_IDENT:       printf("  IDENT      \"%s\"",   yylval.sval); break;
-            case TOK_STRING:      printf("  STRING     \"%s\"",   yylval.sval); break;
-            case TOK_INT:         printf("  INT        %d",       yylval.ival); break;
-            case TOK_FLOAT:       printf("  FLOAT      %f",       yylval.fval); break;
-            case TOK_ARG_REF:     printf("  ARG_REF    %%%d",     yylval.ival); break;
-            case TOK_ARITY_RANGE: printf("  ARITY_RANGE %d-%d",
-                                         yylval.range.lo,
-                                         yylval.range.hi); break;
-            default: break;
-        }
-        putchar('\n');
-    }
-    return 0;
-}
-#endif

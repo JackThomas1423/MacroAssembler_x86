@@ -1,11 +1,19 @@
 %define.table my_table
     rule1: [register, string]
     rule2: [register, address]
+    rule3: [register, number]
+%undef
+
+%define.table my_other_table
+    rule1: [string, string]
+    rule2: [address, address]
+    rule3: [number, number]
 %undef
 
 %type my_type: string | number | register
 
 %define my_string "This is my string!"
+%define my_number 1234
 
 %use my_table
 %macro.strict mov 2
@@ -15,7 +23,7 @@
     ; Note: do the actuall process here
 %endmacro
 
-%use my_table
+%use my_other_table
 %macro.strict sub 2
     %arg %1 : register
     %arg %2 : register
