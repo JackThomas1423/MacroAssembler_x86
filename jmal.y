@@ -19,14 +19,13 @@ extern JmalProgram *jmal_program;
     struct { int lo; int hi; } range;
     struct JmalTypeConstraint *tcp; /* type constraint pointer */
     struct JmalTypeConstraintMulti *tmcp; /* type multi constraint pointer */
-    struct JmalTableRule *tr; /* table rule */
-    struct JmalTable *tb; /* table block */
 }
 
 /* ── Token declarations ───────────────────────────────────────────────── */
 
 /* Directives */
-%token DIR_DEFINE_TABLE
+%token DIR_LITERAL
+%token DIR_ENDLITERAL
 %token DIR_DEFINE
 %token DIR_UNDEF
 %token DIR_TYPE
@@ -70,9 +69,7 @@ extern JmalProgram *jmal_program;
 
 /* Declared grammar types */
 %type <tcp> builtin_type type_constraint
-%type <tmcp> type_list type_union
-%type <tr> table_rule
-%type <tb> table_rules
+%type <tmcp> type_union
 
 /* ── Start symbol ─────────────────────────────────────────────────────── */
 %start program
@@ -99,48 +96,11 @@ newlines:
     ;
 
 directive:
-    define_table_dir
-    | define_dir
+    define_dir
     | undef_dir
     | type_dir
     | use_dir
     | macro_def
-    ;
-
-/* %define.table <name>  [from <name>]
- *     rule: [type, ...]
- * %undef */
-define_table_dir:
-    DIR_DEFINE_TABLE TOK_IDENT newlines table_rules newlines DIR_UNDEF
-    {   
-        JmalTable* table = $4;
-        free(table->name);
-        table->name = $2;
-        jmal_program_add_table(jmal_program, table);
-    }
-    ;
-
-table_rules:
-    newlines { $$ = NULL; }
-    | table_rules table_rule newlines
-    {
-        if ($1 != NULL) {
-            jmal_table_add_rule($1, $2);
-        } else {
-            JmalTable* table = jmal_table_new("temp", yylineno);
-            jmal_table_add_rule(table, $2);
-            $$ = table;
-        }
-    }
-    ;
-
-table_rule:
-    TOK_IDENT TOK_COLON TOK_LBRACKET type_list TOK_RBRACKET newlines
-    {
-        JmalTableRule* rule = jmal_table_rule_new($1, $4, yylineno);
-        free($1);
-        $$ = rule;
-    }
     ;
 
 /* %define <name> <value> */
@@ -210,6 +170,8 @@ macro_body:
 macro_body_item:
     arg_decl newlines
     | rep_block
+    | use_def
+    | literal_block newlines
     | instruction newlines
     | newlines
     ;
@@ -231,6 +193,7 @@ rep_block:
 rep_count:
     TOK_INT         { /* fixed count */ }
     | DIR_ARG_COUNT { /* %0 — repeat once per argument */ }
+    | TOK_ARG_REF   { /* %1-9 */}
     ;
 
 rep_body:
@@ -240,17 +203,41 @@ rep_body:
 
 rep_body_item:
     instruction newlines
-    | DIR_ROTATE TOK_INT newlines { printf("    rotate %d\n", $2); }
+    | DIR_ROTATE TOK_INT newlines     { printf("    rotate %d\n", $2); }
+    | DIR_ROTATE TOK_ARG_REF newlines { printf("    rotate %%%d\n", $2); }
+    | use_def newlines
     | newlines
     ;
 
-/* ════════════════════════════════════════════════════════════════════════
+literal_block:
+    DIR_LITERAL newlines macro_body newlines DIR_ENDLITERAL
+    ;
+
+use_def:
+    DIR_USE TOK_IDENT use_def_items newlines
+    {
+        printf("  use: %s\n", $2);
+    }
+    ;
+
+use_def_items:
+    type_constraint { }
+    | TOK_ARG_REF   { printf("  arg: %%%d\n", $1); }
+    | TOK_INT       { printf("  num: %d\n", $1); }
+    | TOK_IDENT     { printf("  ident: %s\n", $1); }
+    | use_def_items use_def_items
+    ;
+
+    /* ════════════════════════════════════════════════════════════════════════
  * Instructions  (opcode + zero or more operands)
  * ════════════════════════════════════════════════════════════════════════ */
 
 instruction:
     TOK_IDENT operand_list
-    { printf("instr '%s'\n", $1); free($1); }
+    {
+        printf("instr '%s'\n", $1);
+        free($1);
+    }
     ;
 
 operand_list:
@@ -286,18 +273,6 @@ type_union:
     }
     ;
 
-/* comma-separated list used in %arg and table rules */
-type_list:
-    type_constraint
-    {
-        $$ = jmal_type_make_multi($1);
-    }
-    | type_list TOK_COMMA type_constraint
-    {
-        jmal_type_multi_add_type($1, $3);
-    }
-    ;
-
 /* A constraint is either a built-in primitive or a user-defined type name */
 type_constraint:
     builtin_type
@@ -310,9 +285,9 @@ type_constraint:
 
 builtin_type:
     TYPE_REGISTER   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_REGISTER, yylineno); }
-    | TYPE_STRING   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_STRING, yylineno); }
-    | TYPE_NUMBER   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_NUMBER, yylineno); }
-    | TYPE_ADDRESS  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_ADDRESS, yylineno); }
+    | TYPE_STRING   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_STRING, yylineno);   }
+    | TYPE_NUMBER   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_NUMBER, yylineno);   }
+    | TYPE_ADDRESS  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_ADDRESS, yylineno);  }
     ;
 
 %%

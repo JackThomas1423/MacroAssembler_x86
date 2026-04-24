@@ -3,18 +3,9 @@
 %define my_string "This is my string!"
 %define my_number 1234
 
-%macro.strict mov 2
-    %arg %1 : my_type
-    %arg %2 : string
-
-    ; Note: do the actuall process here
-%endmacro
-
-%macro.strict sub 2
-    %arg %1 : register
-    %arg %2 : register
-
-    ; Note: do the actuall process here
+%macro push_wrapper 1
+    %arg %1 : number
+    push %1
 %endmacro
 
 %macro multi_rotate 2
@@ -33,24 +24,19 @@
     %arg %2 : number | string
     %arg %3 : number
 
-    %ensure %1 != %2 say "if it is"
-    %ensure not (%1 == %2) say "You can't do that"
+    ;%ensure %1 != %2 say "if it is"
+    ;%ensure not (%1 == %2) say "You can't do that"
 
-    %if %1 == string
-    %redirect other_macro
+    ;%if %1 == string
+    ;%redirect other_macro
     
-    %if %1 == string
+    ;%if %1 == string
     %use other_macro %1 %2 %3
 
     %rep %0
         push %1
-        multi_rotate left 5
+        %use multi_rotate left 1
     %endrep
-%endmacro
-
-%macro push_wrapper 1
-    %arg %1 : number
-    push %1
 %endmacro
 
 push_macro a b c

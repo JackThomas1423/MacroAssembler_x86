@@ -7,8 +7,6 @@
 
 typedef struct JmalTypeConstraint      JmalTypeConstraint;
 typedef struct JmalTypeConstraintMulti JmalTypeConstraintMulti;
-typedef struct JmalTableRule           JmalTableRule;
-typedef struct JmalTable               JmalTable;
 typedef struct JmalTypeDef             JmalTypeDef;
 typedef struct JmalDefine              JmalDefine;
 typedef struct JmalArgDecl             JmalArgDecl;
@@ -85,68 +83,6 @@ static inline void jmal_type_multi_free(JmalTypeConstraintMulti *t)
     for (size_t i = 0; i < t->type_count; i++)
         jmal_type_free(t->types[i]);
     free(t->types);
-    free(t);
-}
-
-struct JmalTableRule {
-    char* name;
-    JmalTypeConstraintMulti* types;
-    int line;
-};
-
-struct JmalTable {
-    char* name;
-    JmalTableRule** rules;
-    size_t rule_count;
-    int line;
-};
-
-static inline JmalTableRule *jmal_table_rule_new(const char *name, JmalTypeConstraintMulti *t, int line)
-{
-    JmalTableRule *r = malloc(sizeof *r);
-    r->name       = strdup(name);
-    r->types      = t;
-    r->line       = line;
-    return r;
-}
-
-/*static inline void jmal_table_rule_add_type(JmalTableRule *r, JmalTypeConstraint *t)
-{
-    r->types = realloc(r->types, (r->type_count + 1) * sizeof *r->types);
-    r->types[r->type_count++] = t;
-}*/
-
-static inline void jmal_table_rule_free(JmalTableRule *r)
-{
-    if (!r) return;
-    jmal_type_multi_free(r->types);
-    free(r->name);
-    free(r);
-}
-
-static inline JmalTable *jmal_table_new(const char *name, int line)
-{
-    JmalTable *t   = malloc(sizeof *t);
-    t->name        = strdup(name);
-    t->rules       = NULL;
-    t->rule_count  = 0;
-    t->line        = line;
-    return t;
-}
-
-static inline void jmal_table_add_rule(JmalTable *t, JmalTableRule *r)
-{
-    t->rules = realloc(t->rules, (t->rule_count + 1) * sizeof *t->rules);
-    t->rules[t->rule_count++] = r;
-}
-
-static inline void jmal_table_free(JmalTable *t)
-{
-    if (!t) return;
-    for (size_t i = 0; i < t->rule_count; i++)
-        jmal_table_rule_free(t->rules[i]);
-    free(t->rules);
-    free(t->name);
     free(t);
 }
 
@@ -566,11 +502,6 @@ static inline void jmal_macro_free(JmalMacro *m)
  * ═══════════════════════════════════════════════════════════════════════ */
 
 struct JmalProgram {
-    /* --- definitions collected during parsing --- */
-
-    JmalTable   **tables;
-    size_t        table_count;
-
     JmalTypeDef **typedefs;
     size_t        typedef_count;
 
@@ -591,7 +522,6 @@ struct JmalProgram {
 static inline JmalProgram *jmal_program_new(const char *filename)
 {
     JmalProgram *p  = malloc(sizeof *p);
-    p->tables       = NULL; p->table_count   = 0;
     p->typedefs     = NULL; p->typedef_count = 0;
     p->defines      = NULL; p->define_count  = 0;
     p->macros       = NULL; p->macro_count   = 0;
@@ -599,12 +529,6 @@ static inline JmalProgram *jmal_program_new(const char *filename)
     p->filename     = filename ? strdup(filename) : strdup("<stdin>");
     return p;
 }
-
-/* --- add helpers --- */
-
-static inline void jmal_program_add_table(JmalProgram *p, JmalTable *t)
-{ p->tables = realloc(p->tables, (p->table_count+1)*sizeof*p->tables);
-  p->tables[p->table_count++] = t; }
 
 static inline void jmal_program_add_typedef(JmalProgram *p, JmalTypeDef *t)
 { p->typedefs = realloc(p->typedefs, (p->typedef_count+1)*sizeof*p->typedefs);
@@ -627,12 +551,10 @@ static inline void jmal_program_add_instr(JmalProgram *p, JmalInstruction *i)
 static inline void jmal_program_free(JmalProgram *p)
 {
     if (!p) return;
-    for (size_t i = 0; i < p->table_count;   i++) jmal_table_free(p->tables[i]);
     for (size_t i = 0; i < p->typedef_count; i++) jmal_typedef_free(p->typedefs[i]);
     for (size_t i = 0; i < p->define_count;  i++) jmal_define_free(p->defines[i]);
     for (size_t i = 0; i < p->macro_count;   i++) jmal_macro_free(p->macros[i]);
     for (size_t i = 0; i < p->instr_count;   i++) jmal_instr_free(p->instrs[i]);
-    free(p->tables);
     free(p->typedefs);
     free(p->defines);
     free(p->macros);
@@ -661,27 +583,7 @@ static inline const char *jmal_type_kind_str(JmalTypeKind k)
 
 static inline void jmal_program_dump(const JmalProgram *p)
 {
-    printf("=== JmalProgram: %s ===\n\n", p->filename);
-
-    printf("-- Tables (%zu) --\n", p->table_count);
-    for (size_t i = 0; i < p->table_count; i++) {
-        JmalTable *t = p->tables[i];
-        printf("  table '%s'\n", t->name);
-        for (size_t r = 0; r < t->rule_count; r++) {
-            JmalTableRule *rule = t->rules[r];
-            printf("    rule '%s': [", rule->name);
-            JmalTypeConstraintMulti* type_multi = rule->types;
-            for (size_t j = 0; j < type_multi->type_count; j++) {
-                JmalTypeConstraint *tc = type_multi->types[j];
-                if (tc->kind == JMAL_TYPE_USER)
-                    printf("%s", tc->name);
-                else
-                    printf("%s", jmal_type_kind_str(tc->kind));
-                if (j + 1 < type_multi->type_count) printf(", ");
-            }
-            printf("]\n");
-        }
-    }
+    printf("=== JmalProgram: %s ===\n", p->filename);
 
     printf("\n-- TypeDefs (%zu) --\n", p->typedef_count);
     for (size_t i = 0; i < p->typedef_count; i++) {

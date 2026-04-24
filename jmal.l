@@ -67,7 +67,8 @@ ARG_REF     "%"[0-9]+
      *  Directives  (%keyword)                                    *
      * ────────────────────────────────────────────────────────── */
 
-"%define.table"     { return DIR_DEFINE_TABLE;  }
+"%literal"          { return DIR_LITERAL;        }
+"%endliteral"       { return DIR_ENDLITERAL;     }
 "%define"           { return DIR_DEFINE;         }
 "%undef"            { return DIR_UNDEF;          }
 "%type"             { return DIR_TYPE;           }
