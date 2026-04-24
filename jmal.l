@@ -78,7 +78,6 @@ REF_ARG     "&"[0-9]+
 "%undef"            { return DIR_UNDEF;          }
 "%type"             { return DIR_TYPE;           }
 "%use"              { return DIR_USE;            }
-"%macro.strict"     { return DIR_MACRO_STRICT;   }
 "%macro"            { return DIR_MACRO;          }
 "%endmacro"         { return DIR_ENDMACRO;       }
 "%arg"              { return DIR_ARG;            }

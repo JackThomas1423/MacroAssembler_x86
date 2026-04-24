@@ -10,7 +10,7 @@ BUILD_DIR = build
 
 TARGET_SRCS = main.c $(addprefix $(BUILD_DIR)/, $(BISON_C) $(FLEX_C))
 
-all: $(BUILD_DIR) $(TARGET)
+compile: $(BUILD_DIR) $(TARGET)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -23,6 +23,9 @@ $(BUILD_DIR)/$(BISON_C) $(BUILD_DIR)/$(BISON_H): jmal.y
 
 $(BUILD_DIR)/$(FLEX_C): jmal.l $(BUILD_DIR)/$(BISON_H)
 	flex -o $@ jmal.l
+
+run:
+	./$(TARGET) main.jmal
 
 clean:
 	rm -rf $(BUILD_DIR)

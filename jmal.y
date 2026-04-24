@@ -34,7 +34,6 @@ extern JmalProgram *jmal_program;
 %token DIR_UNDEF
 %token DIR_TYPE
 %token DIR_USE
-%token DIR_MACRO_STRICT
 %token DIR_MACRO
 %token DIR_ENDMACRO
 %token DIR_ARG
@@ -91,8 +90,6 @@ program:
     | program statement
     ;
 
-/* A statement is any top-level construct followed by at least one newline.
- * Blank lines are handled by the newlines rule below. */
 statement:
     directive newlines
     | instruction newlines
@@ -109,7 +106,6 @@ directive:
     define_dir
     | undef_dir
     | type_dir
-    | use_dir
     | macro_def
     ;
 
@@ -146,36 +142,27 @@ type_dir:
     }
     ;
 
-/* %use <table_name> */
-use_dir:
-    DIR_USE TOK_IDENT
-    { printf("use table '%s'\n", $2); free($2); }
-    ;
-
 /* ════════════════════════════════════════════════════════════════════════
  * Macro definitions
  * ════════════════════════════════════════════════════════════════════════ */
 
 macro_def:
     macro_header newlines macro_body DIR_ENDMACRO
-    { printf("endmacro\n"); }
     ;
 
 macro_header:
     DIR_MACRO TOK_IDENT TOK_INT
     {
-        printf("macro '%s' arity %d\n", $2, $3);
+        JmalMacro* macro = jmal_macro_new($2, $3, $3, yylineno);
+        jmal_program_add_macro(jmal_program, macro);
         free($2);
     }
     | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE
     {
-        printf("macro '%s' arity %d-%d\n", $2, $3.lo, $3.hi);
+        JmalMacro* macro = jmal_macro_new($2, $3.lo, $3.hi, yylineno);
+        jmal_program_add_macro(jmal_program, macro);
         free($2);
     }
-    | DIR_MACRO_STRICT TOK_IDENT TOK_INT
-    { printf("macro.strict '%s' arity %d\n", $2, $3); free($2); }
-    | DIR_MACRO_STRICT TOK_IDENT TOK_ARITY_RANGE
-    { printf("macro.strict '%s' arity %d-%d\n", $2, $3.lo, $3.hi); free($2); }
     ;
 
 macro_body:
@@ -206,12 +193,24 @@ if_def:
     ;
 
 if_cond:
-    if_cond_item TOK_COMPARE if_cond_item
-    | if_cond_item TOK_COMPARE_GREATER if_cond_item
-    | if_cond_item TOK_COMPARE_NOT if_cond_item
+    expr_item TOK_COMPARE expr_item
+    | expr_item TOK_COMPARE_GREATER expr_item
+    | expr_item TOK_COMPARE_NOT expr_item
     ;
 
-if_cond_item:
+expr:
+    expr_item
+    | expr expr_op expr
+    ;
+
+expr_op:
+    TOK_PLUS
+    | TOK_MINUS
+    | TOK_STAR
+    | TOK_SLASH
+    ;
+
+expr_item:
     TOK_IDENT
     | TOK_ARG_REF
     | TOK_REF_ARG
@@ -227,30 +226,25 @@ rotate_def:
 
 /* change if_cond_item definition to be used more broadly */
 arg_ref_set:
-    TOK_ARG_REF TOK_EQUAL if_cond_item newlines
-    | TOK_REF_ARG TOK_EQUAL if_cond_item newlines
+    TOK_ARG_REF TOK_EQUAL expr newlines
+    | TOK_REF_ARG TOK_EQUAL expr newlines
     ;
 
 /* %arg %N : type_constraint */
 arg_decl:
     DIR_ARG TOK_ARG_REF TOK_COLON type_constraint
-    { printf("  arg %%%d\n", $2); }
     |   DIR_ARG TOK_ARG_REF TOK_COLON type_union
-    { printf("  arg %%%d\n", $2); }
     ;
 
 ref_decl:
     DIR_REF TOK_REF_ARG TOK_COLON type_constraint
-    { printf("  ref &%d\n", $2); }
     | DIR_REF TOK_REF_ARG TOK_COLON type_union
-    { printf("  ref &%d\n", $2); }
     ;
 
 /* %rep %0 … %endrep */
 rep_block:
-    DIR_REP rep_count newlines rep_body DIR_ENDREP newlines
-    { printf("  rep block\n"); }
-    | DIR_REP if_cond newlines rep_body DIR_ENDREP newlines
+    DIR_REP rep_count newlines macro_body DIR_ENDREP newlines
+    | DIR_REP if_cond newlines macro_body DIR_ENDREP newlines
     ;
 
 rep_count:
@@ -259,36 +253,20 @@ rep_count:
     | TOK_ARG_REF   { /* %1-9 */}
     ;
 
-rep_body:
-    %empty {}
-    | rep_body rep_body_item
-    ;
-
-rep_body_item:
-    instruction newlines
-    | DIR_ROTATE TOK_INT newlines     { printf("    rotate %d\n", $2); }
-    | DIR_ROTATE TOK_ARG_REF newlines { printf("    rotate %%%d\n", $2); }
-    | use_def newlines
-    | newlines
-    ;
-
 literal_block:
     DIR_LITERAL newlines macro_body newlines DIR_ENDLITERAL
     ;
 
 use_def:
     DIR_USE TOK_IDENT use_def_items newlines
-    {
-        printf("  use: %s\n", $2);
-    }
     | DIR_USE TOK_IDENT newlines
     ;
 
 use_def_items:
     type_constraint
-    | TOK_ARG_REF   { printf("  arg: %%%d\n", $1); }
-    | TOK_INT       { printf("  num: %d\n", $1); }
-    | TOK_IDENT     { printf("  ident: %s\n", $1); }
+    | TOK_ARG_REF
+    | TOK_INT
+    | TOK_IDENT
     | use_def_items use_def_items
     ;
 
@@ -330,7 +308,7 @@ type_union:
     {
         $$ = jmal_type_make_multi($1);
     }
-    | type_union TOK_PIPE builtin_type
+    | type_union TOK_PIPE type_constraint
     {
         jmal_type_multi_add_type($1, $3);
         $$ = $1;

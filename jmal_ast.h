@@ -11,6 +11,9 @@ typedef struct JmalTypeDef             JmalTypeDef;
 typedef struct JmalDefine              JmalDefine;
 typedef struct JmalArgDecl             JmalArgDecl;
 typedef struct JmalRepBlock            JmalRepBlock;
+typedef struct JmalRotate              JmalRotate;
+typedef struct JmalUse                 JmalUse;
+typedef struct JmalBlock               JmalBlock;
 typedef struct JmalOperand             JmalOperand;
 typedef struct JmalInstruction         JmalInstruction;
 typedef struct JmalMacroBody           JmalMacroBody;
@@ -166,6 +169,76 @@ static inline void jmal_define_free(JmalDefine *d)
     free(d->str_val);
     free(d->name);
     free(d);
+}
+
+struct JmalUse {
+    char  *name;
+    char **args;
+    size_t arg_count;
+    int    line;
+};
+
+static inline JmalUse *jmal_use_new(const char *name, int line)
+{
+    JmalUse *u  = malloc(sizeof *u);
+    u->name     = strdup(name);
+    u->args     = NULL;
+    u->arg_count = 0;
+    u->line     = line;
+    return u;
+}
+
+static inline void jmal_use_add_arg(JmalUse *u, const char *arg)
+{
+    u->args = realloc(u->args, (u->arg_count + 1) * sizeof *u->args);
+    u->args[u->arg_count++] = strdup(arg);
+}
+
+static inline void jmal_use_free(JmalUse *u)
+{
+    if (!u) return;
+    for (size_t i = 0; i < u->arg_count; i++)
+        free(u->args[i]);
+    free(u->args);
+    free(u->name);
+    free(u);
+}
+
+typedef enum {
+    JMAL_ROTATE_INT,   /* %rotate <literal N>  */
+    JMAL_ROTATE_ARG    /* %rotate <arg_name>   */
+} JmalRotateType;
+
+struct JmalRotate {
+    JmalRotateType kind;
+    union {
+        int   count;           /* JMAL_ROTATE_INT */
+        char *arg_name;        /* JMAL_ROTATE_ARG */
+    };
+};
+
+static inline JmalRotate *jmal_rotate_int(int count)
+{
+    JmalRotate *r  = malloc(sizeof *r);
+    r->kind        = JMAL_ROTATE_INT;
+    r->count       = count;
+    return r;
+}
+
+static inline JmalRotate *jmal_rotate_arg(const char *arg_name)
+{
+    JmalRotate *r  = malloc(sizeof *r);
+    r->kind        = JMAL_ROTATE_ARG;
+    r->arg_name    = strdup(arg_name);
+    return r;
+}
+
+static inline void jmal_rotate_free(JmalRotate *r)
+{
+    if (!r) return;
+    if (r->kind == JMAL_ROTATE_ARG)
+        free(r->arg_name);
+    free(r);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -329,8 +402,7 @@ static inline JmalArgDecl *jmal_arg_decl_new(int index, int line)
 
 static inline void jmal_arg_decl_add(JmalArgDecl *a, JmalTypeConstraint *t)
 {
-    a->constraints = realloc(a->constraints,
-                             (a->constraint_count + 1) * sizeof *a->constraints);
+    a->constraints = realloc(a->constraints, (a->constraint_count + 1) * sizeof *a->constraints);
     a->constraints[a->constraint_count++] = t;
 }
 
@@ -343,67 +415,112 @@ static inline void jmal_arg_decl_free(JmalArgDecl *a)
     free(a);
 }
 
+typedef enum {
+    JMAL_BLOCK_REP,    /* %rep N / %rep %0 … %endrep */
+    JMAL_BLOCK_USE,    /* %use <name> [args…]         */
+    JMAL_BLOCK_LIT
+    /* add new block kinds here, e.g. JMAL_BLOCK_IF, JMAL_BLOCK_WHILE */
+} JmalBlockKind;
+
 /*
- * %rep N / %rep %0
- *   push %1
- *   %rotate 1
- * %endrep
+ * %rep N / %rep %0 … %endrep
+ *
+ *   use_arg_count  — 1 = %rep %0 (use macro arg-count),  0 = %rep <literal N>
+ *   count          — literal repeat count (valid when use_arg_count == 0)
+ *   rotates        — array of %rotate directives in source order
+ *   rotate_count   — number of %rotate entries
  */
 struct JmalRepBlock {
-    int   use_arg_count;   /* 1 = %rep %0,  0 = %rep <literal N>  */
-    int   count;           /* set when use_arg_count == 0          */
+    int          use_arg_count;
+    int          count;
+    JmalRotate **rotates;
+    size_t       rotate_count;
+};
 
-    /* body: interleaved instructions and %rotate steps */
+static inline void jmal_rep_init(JmalRepBlock *r, int use_arg_count, int count)
+{
+    r->use_arg_count = use_arg_count;
+    r->count         = count;
+    r->rotates       = NULL;
+    r->rotate_count  = 0;
+}
+
+static inline void jmal_rep_add_rotate(JmalRepBlock *r, JmalRotate *rot)
+{
+    r->rotates = realloc(r->rotates, (r->rotate_count + 1) * sizeof *r->rotates);
+    r->rotates[r->rotate_count++] = rot;
+}
+
+static inline void jmal_rep_cleanup(JmalRepBlock *r)
+{
+    for (size_t i = 0; i < r->rotate_count; i++)
+        jmal_rotate_free(r->rotates[i]);
+    free(r->rotates);
+}
+
+/*
+ * General block node.  The `kind` field says which block construct this is.
+ * Kind-specific data is stored in the `rep` / `use` union member.
+ */
+struct JmalBlock {
+    JmalBlockKind kind;
+
+    /* body: interleaved instructions (shared by all block kinds) */
     JmalInstruction **instrs;
     size_t            instr_count;
 
-    int  *rotates;         /* rotate amount at each %rotate        */
-    int  *rotate_after;    /* rotate_after[i]: after which instr index */
-    size_t rotate_count;
-
+    union {
+        JmalRepBlock rep; /* JMAL_BLOCK_REP */
+        JmalUse     *use; /* JMAL_BLOCK_USE */
+    };
     int line;
 };
 
-static inline JmalRepBlock *jmal_rep_new(int use_arg_count, int count, int line)
+static inline JmalBlock *jmal_block_new_rep(int use_arg_count, int count, int line)
 {
-    JmalRepBlock *r   = malloc(sizeof *r);
-    r->use_arg_count  = use_arg_count;
-    r->count          = count;
-    r->instrs         = NULL;
-    r->instr_count    = 0;
-    r->rotates        = NULL;
-    r->rotate_after   = NULL;
-    r->rotate_count   = 0;
-    r->line           = line;
-    return r;
+    JmalBlock *b = malloc(sizeof *b);
+    b->kind      = JMAL_BLOCK_REP;
+    b->instrs    = NULL;
+    b->instr_count = 0;
+    b->line      = line;
+    jmal_rep_init(&b->rep, use_arg_count, count);
+    return b;
 }
 
-static inline void jmal_rep_add_instr(JmalRepBlock *r, JmalInstruction *i)
+static inline JmalBlock *jmal_block_new_use(JmalUse *use, int line)
+{
+    JmalBlock *b = malloc(sizeof *b);
+    b->kind      = JMAL_BLOCK_USE;
+    b->instrs    = NULL;
+    b->instr_count = 0;
+    b->line      = line;
+    b->use       = use;
+    return b;
+}
+
+static inline void jmal_block_add_instr(JmalBlock *r, JmalInstruction *i)
 {
     r->instrs = realloc(r->instrs, (r->instr_count + 1) * sizeof *r->instrs);
     r->instrs[r->instr_count++] = i;
 }
 
-static inline void jmal_rep_add_rotate(JmalRepBlock *r, int amount)
+static inline void jmal_block_add_rotate(JmalBlock *b, JmalRotate *rot)
 {
-    r->rotates      = realloc(r->rotates,
-                              (r->rotate_count + 1) * sizeof *r->rotates);
-    r->rotate_after = realloc(r->rotate_after,
-                              (r->rotate_count + 1) * sizeof *r->rotate_after);
-    r->rotates[r->rotate_count]      = amount;
-    r->rotate_after[r->rotate_count] = (int)r->instr_count; /* after current */
-    r->rotate_count++;
+    jmal_rep_add_rotate(&b->rep, rot); /* only valid for JMAL_BLOCK_REP */
 }
 
-static inline void jmal_rep_free(JmalRepBlock *r)
+static inline void jmal_block_free(JmalBlock *b)
 {
-    if (!r) return;
-    for (size_t i = 0; i < r->instr_count; i++)
-        jmal_instr_free(r->instrs[i]);
-    free(r->instrs);
-    free(r->rotates);
-    free(r->rotate_after);
-    free(r);
+    if (!b) return;
+    for (size_t i = 0; i < b->instr_count; i++)
+        jmal_instr_free(b->instrs[i]);
+    free(b->instrs);
+    switch (b->kind) {
+        case JMAL_BLOCK_REP: jmal_rep_cleanup(&b->rep); break;
+        case JMAL_BLOCK_USE: jmal_use_free(b->use);     break;
+        case JMAL_BLOCK_LIT:                            break; /* no extra data */
+    }
+    free(b);
 }
 
 /*
@@ -412,7 +529,7 @@ static inline void jmal_rep_free(JmalRepBlock *r)
  */
 typedef enum {
     JMAL_BODY_ARG_DECL,
-    JMAL_BODY_REP,
+    JMAL_BODY_BLOCK,
     JMAL_BODY_INSTR
 } JmalBodyItemKind;
 
@@ -420,7 +537,7 @@ typedef struct {
     JmalBodyItemKind kind;
     union {
         JmalArgDecl     *arg;
-        JmalRepBlock    *rep;
+        JmalBlock       *block;
         JmalInstruction *instr;
     };
 } JmalBodyItem;
@@ -429,9 +546,9 @@ static inline void jmal_body_item_free(JmalBodyItem *item)
 {
     if (!item) return;
     switch (item->kind) {
-        case JMAL_BODY_ARG_DECL: jmal_arg_decl_free(item->arg);   break;
-        case JMAL_BODY_REP:      jmal_rep_free(item->rep);         break;
-        case JMAL_BODY_INSTR:    jmal_instr_free(item->instr);     break;
+        case JMAL_BODY_ARG_DECL: jmal_arg_decl_free(item->arg);    break;
+        case JMAL_BODY_BLOCK:    jmal_block_free(item->block);      break;
+        case JMAL_BODY_INSTR:    jmal_instr_free(item->instr);      break;
     }
     free(item);
 }
@@ -447,14 +564,10 @@ static inline void jmal_body_item_free(JmalBodyItem *item)
 
 struct JmalMacro {
     char   *name;
-    int     is_strict;       /* 1 = %macro.strict, 0 = %macro         */
 
     /* arity: fixed (lo == hi) or range (lo != hi) */
     int     arity_lo;
     int     arity_hi;
-
-    /* optional %use table that was active when this macro was defined */
-    char   *use_table;       /* NULL if no %use preceded this macro    */
 
     JmalBodyItem **body;
     size_t         body_count;
@@ -462,18 +575,12 @@ struct JmalMacro {
     int line;
 };
 
-static inline JmalMacro *jmal_macro_new(const char *name,
-                                         int is_strict,
-                                         int arity_lo, int arity_hi,
-                                         const char *use_table,
-                                         int line)
+static inline JmalMacro *jmal_macro_new(const char *name, int arity_lo, int arity_hi, int line)
 {
     JmalMacro *m  = malloc(sizeof *m);
     m->name       = strdup(name);
-    m->is_strict  = is_strict;
     m->arity_lo   = arity_lo;
     m->arity_hi   = arity_hi;
-    m->use_table  = use_table ? strdup(use_table) : NULL;
     m->body       = NULL;
     m->body_count = 0;
     m->line       = line;
@@ -492,7 +599,6 @@ static inline void jmal_macro_free(JmalMacro *m)
     for (size_t i = 0; i < m->body_count; i++)
         jmal_body_item_free(m->body[i]);
     free(m->body);
-    free(m->use_table);
     free(m->name);
     free(m);
 }
@@ -614,10 +720,8 @@ static inline void jmal_program_dump(const JmalProgram *p)
     printf("\n-- Macros (%zu) --\n", p->macro_count);
     for (size_t i = 0; i < p->macro_count; i++) {
         JmalMacro *m = p->macros[i];
-        printf("  %smacro '%s' arity %d",
-               m->is_strict ? "strict " : "", m->name, m->arity_lo);
+        printf("  macro '%s' arity %d", m->name, m->arity_lo);
         if (m->arity_hi != m->arity_lo) printf("-%d", m->arity_hi);
-        if (m->use_table) printf(" (uses table '%s')", m->use_table);
         printf("  [%zu body items]\n", m->body_count);
     }
 
