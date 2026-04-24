@@ -24,6 +24,9 @@ extern JmalProgram *jmal_program;
 /* ── Token declarations ───────────────────────────────────────────────── */
 
 /* Directives */
+%token DIR_ENSURE
+%token DIR_IF
+%token DIR_REDIRECT
 %token DIR_LITERAL
 %token DIR_ENDLITERAL
 %token DIR_DEFINE

@@ -67,6 +67,9 @@ ARG_REF     "%"[0-9]+
      *  Directives  (%keyword)                                    *
      * ────────────────────────────────────────────────────────── */
 
+"%redirect"         { return DIR_REDIRECT;       }
+"%ensure"           { return DIR_ENSURE;         }
+"%if"               { return DIR_IF;             }
 "%literal"          { return DIR_LITERAL;        }
 "%endliteral"       { return DIR_ENDLITERAL;     }
 "%define"           { return DIR_DEFINE;         }
