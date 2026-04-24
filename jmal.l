@@ -51,6 +51,7 @@ STRING      \"([^\"\n\\]|\\.)*\"
 
 /* arg placeholder: %1 .. %9 and %0 (arg count) */
 ARG_REF     "%"[0-9]+
+REF_ARG     "&"[0-9]+
 
 %%
 
@@ -70,6 +71,7 @@ ARG_REF     "%"[0-9]+
 "%redirect"         { return DIR_REDIRECT;       }
 "%ensure"           { return DIR_ENSURE;         }
 "%if"               { return DIR_IF;             }
+"%endif"            { return DIR_ENDIF;          }
 "%literal"          { return DIR_LITERAL;        }
 "%endliteral"       { return DIR_ENDLITERAL;     }
 "%define"           { return DIR_DEFINE;         }
@@ -80,6 +82,7 @@ ARG_REF     "%"[0-9]+
 "%macro"            { return DIR_MACRO;          }
 "%endmacro"         { return DIR_ENDMACRO;       }
 "%arg"              { return DIR_ARG;            }
+"%ref"              { return DIR_REF;            }
 "%rep"              { return DIR_REP;            }
 "%endrep"           { return DIR_ENDREP;         }
 "%rotate"           { return DIR_ROTATE;         }
@@ -92,6 +95,11 @@ ARG_REF     "%"[0-9]+
 {ARG_REF}           {
                         yylval.ival = atoi(yytext + 1);
                         return TOK_ARG_REF;
+                    }
+
+{REF_ARG}           {
+                        yylval.ival = atoi(yytext + 1);
+                        return TOK_REF_ARG;
                     }
 
     /* ────────────────────────────────────────────────────────── *
@@ -155,6 +163,10 @@ ARG_REF     "%"[0-9]+
 
 ","                 { return TOK_COMMA;    }
 ":"                 { return TOK_COLON;    }
+"="                 { return TOK_EQUAL;    }
+"=="                { return TOK_COMPARE;  }
+">="                { return TOK_COMPARE_GREATER;  }
+"!="                { return TOK_COMPARE_NOT; }
 "|"                 { return TOK_PIPE;     }
 "["                 { return TOK_LBRACKET; }
 "]"                 { return TOK_RBRACKET; }

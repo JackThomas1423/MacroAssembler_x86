@@ -26,6 +26,7 @@ extern JmalProgram *jmal_program;
 /* Directives */
 %token DIR_ENSURE
 %token DIR_IF
+%token DIR_ENDIF
 %token DIR_REDIRECT
 %token DIR_LITERAL
 %token DIR_ENDLITERAL
@@ -38,6 +39,7 @@ extern JmalProgram *jmal_program;
 %token DIR_ENDMACRO
 %token DIR_ARG
 %token DIR_REP
+%token DIR_REF
 %token DIR_ENDREP
 %token DIR_ROTATE
 %token DIR_ARG_COUNT
@@ -54,6 +56,7 @@ extern JmalProgram *jmal_program;
 %token <ival> TOK_INT
 %token <fval> TOK_FLOAT
 %token <ival> TOK_ARG_REF
+%token <ival> TOK_REF_ARG
 %token <range> TOK_ARITY_RANGE
 
 /* Punctuation */
@@ -63,6 +66,10 @@ extern JmalProgram *jmal_program;
 %token TOK_PIPE
 %token TOK_LBRACKET
 %token TOK_RBRACKET
+%token TOK_EQUAL
+%token TOK_COMPARE
+%token TOK_COMPARE_GREATER
+%token TOK_COMPARE_NOT
 %token TOK_LPAREN
 %token TOK_RPAREN
 %token TOK_PLUS
@@ -156,9 +163,15 @@ macro_def:
 
 macro_header:
     DIR_MACRO TOK_IDENT TOK_INT
-    { printf("macro '%s' arity %d\n", $2, $3); free($2); }
+    {
+        printf("macro '%s' arity %d\n", $2, $3);
+        free($2);
+    }
     | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE
-    { printf("macro '%s' arity %d-%d\n", $2, $3.lo, $3.hi); free($2); }
+    {
+        printf("macro '%s' arity %d-%d\n", $2, $3.lo, $3.hi);
+        free($2);
+    }
     | DIR_MACRO_STRICT TOK_IDENT TOK_INT
     { printf("macro.strict '%s' arity %d\n", $2, $3); free($2); }
     | DIR_MACRO_STRICT TOK_IDENT TOK_ARITY_RANGE
@@ -172,11 +185,50 @@ macro_body:
 
 macro_body_item:
     arg_decl newlines
+    | ref_decl newlines
     | rep_block
+    | ensure_def
     | use_def
+    | if_def
+    | rotate_def
+    | arg_ref_set
     | literal_block newlines
     | instruction newlines
     | newlines
+    ;
+
+ensure_def:
+    DIR_ENSURE if_cond newlines
+    ;
+
+if_def:
+    DIR_IF if_cond macro_body DIR_ENDIF newlines
+    ;
+
+if_cond:
+    if_cond_item TOK_COMPARE if_cond_item
+    | if_cond_item TOK_COMPARE_GREATER if_cond_item
+    | if_cond_item TOK_COMPARE_NOT if_cond_item
+    ;
+
+if_cond_item:
+    TOK_IDENT
+    | TOK_ARG_REF
+    | TOK_REF_ARG
+    | TOK_INT
+    | TOK_STRING
+    | DIR_ARG_COUNT
+    ;
+
+rotate_def:
+    DIR_ROTATE TOK_INT newlines
+    | DIR_ROTATE TOK_ARG_REF newlines
+    ;
+
+/* change if_cond_item definition to be used more broadly */
+arg_ref_set:
+    TOK_ARG_REF TOK_EQUAL if_cond_item newlines
+    | TOK_REF_ARG TOK_EQUAL if_cond_item newlines
     ;
 
 /* %arg %N : type_constraint */
@@ -187,10 +239,18 @@ arg_decl:
     { printf("  arg %%%d\n", $2); }
     ;
 
+ref_decl:
+    DIR_REF TOK_REF_ARG TOK_COLON type_constraint
+    { printf("  ref &%d\n", $2); }
+    | DIR_REF TOK_REF_ARG TOK_COLON type_union
+    { printf("  ref &%d\n", $2); }
+    ;
+
 /* %rep %0 … %endrep */
 rep_block:
     DIR_REP rep_count newlines rep_body DIR_ENDREP newlines
     { printf("  rep block\n"); }
+    | DIR_REP if_cond newlines rep_body DIR_ENDREP newlines
     ;
 
 rep_count:
@@ -221,10 +281,11 @@ use_def:
     {
         printf("  use: %s\n", $2);
     }
+    | DIR_USE TOK_IDENT newlines
     ;
 
 use_def_items:
-    type_constraint { }
+    type_constraint
     | TOK_ARG_REF   { printf("  arg: %%%d\n", $1); }
     | TOK_INT       { printf("  num: %d\n", $1); }
     | TOK_IDENT     { printf("  ident: %s\n", $1); }
