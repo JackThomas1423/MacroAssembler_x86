@@ -13,24 +13,31 @@ typedef struct JmalArgDecl             JmalArgDecl;
 typedef struct JmalRepBlock            JmalRepBlock;
 typedef struct JmalRotate              JmalRotate;
 typedef struct JmalUse                 JmalUse;
-typedef struct JmalBlock               JmalBlock;
 typedef struct JmalOperand             JmalOperand;
 typedef struct JmalInstruction         JmalInstruction;
-typedef struct JmalMacroBody           JmalMacroBody;
+typedef struct JmalStatement           JmalStatement;
+typedef struct JmalStatementMulti      JmalStatementMulti;
 typedef struct JmalMacro               JmalMacro;
 typedef struct JmalProgram             JmalProgram;
+
+typedef unsigned int                   JmalArgRef;
 
 typedef enum {
     JMAL_TYPE_BUILTIN_REGISTER,
     JMAL_TYPE_BUILTIN_STRING,
     JMAL_TYPE_BUILTIN_NUMBER,
     JMAL_TYPE_BUILTIN_ADDRESS,
-    JMAL_TYPE_USER  /* %type my_type: string | number */
+    JMAL_TYPE_LIT_INT,
+    JMAL_TYPE_ARG_REF,
+    JMAL_TYPE_USER             /* %type my_type: string | number */
 } JmalTypeKind;
 
 struct JmalTypeConstraint {
     JmalTypeKind kind;
-    char* name;   /* set when kind == JMAL_TYPE_USER, else NULL */
+    union {
+        char* name;   /* set when kind == JMAL_TYPE_USER, else NULL */
+        int value;
+    };
     int line;
 };
 
@@ -64,6 +71,24 @@ static inline JmalTypeConstraint *jmal_type_builtin(JmalTypeKind k, int line)
     return t;
 }
 
+static inline JmalTypeConstraint *jmal_type_arg_ref(JmalArgRef arg_ref, int line)
+{
+    JmalTypeConstraint *t = malloc(sizeof *t);
+    t->kind = JMAL_TYPE_ARG_REF;
+    t->value = arg_ref;
+    t->line = line;
+    return t;
+}
+
+static inline JmalTypeConstraint *jmal_type_lit_int(int v, int line)
+{
+    JmalTypeConstraint *t = malloc(sizeof *t);
+    t->kind = JMAL_TYPE_LIT_INT;
+    t->value = v;
+    t->line = line;
+    return t;
+}
+
 static inline JmalTypeConstraint *jmal_type_user(const char *name, int line)
 {
     JmalTypeConstraint *t = malloc(sizeof *t);
@@ -76,7 +101,8 @@ static inline JmalTypeConstraint *jmal_type_user(const char *name, int line)
 static inline void jmal_type_free(JmalTypeConstraint *t)
 {
     if (!t) return;
-    free(t->name);
+    if (t->kind == JMAL_TYPE_USER)
+        free(t->name);
     free(t);
 }
 
@@ -172,34 +198,24 @@ static inline void jmal_define_free(JmalDefine *d)
 }
 
 struct JmalUse {
-    char  *name;
-    char **args;
-    size_t arg_count;
-    int    line;
+    char *name;
+    JmalTypeConstraintMulti *args;
+    int line;
 };
 
-static inline JmalUse *jmal_use_new(const char *name, int line)
+static inline JmalUse *jmal_use_new(const char *name, JmalTypeConstraintMulti *tm, int line)
 {
     JmalUse *u  = malloc(sizeof *u);
     u->name     = strdup(name);
-    u->args     = NULL;
-    u->arg_count = 0;
+    u->args     = tm;
     u->line     = line;
     return u;
-}
-
-static inline void jmal_use_add_arg(JmalUse *u, const char *arg)
-{
-    u->args = realloc(u->args, (u->arg_count + 1) * sizeof *u->args);
-    u->args[u->arg_count++] = strdup(arg);
 }
 
 static inline void jmal_use_free(JmalUse *u)
 {
     if (!u) return;
-    for (size_t i = 0; i < u->arg_count; i++)
-        free(u->args[i]);
-    free(u->args);
+    jmal_type_multi_free(u->args);
     free(u->name);
     free(u);
 }
@@ -212,8 +228,8 @@ typedef enum {
 struct JmalRotate {
     JmalRotateType kind;
     union {
-        int   count;           /* JMAL_ROTATE_INT */
-        char *arg_name;        /* JMAL_ROTATE_ARG */
+        int        count;         /* JMAL_ROTATE_INT */
+        JmalArgRef argRef;        /* JMAL_ROTATE_ARG */
     };
 };
 
@@ -225,19 +241,17 @@ static inline JmalRotate *jmal_rotate_int(int count)
     return r;
 }
 
-static inline JmalRotate *jmal_rotate_arg(const char *arg_name)
+static inline JmalRotate *jmal_rotate_arg(unsigned int arg_ref)
 {
     JmalRotate *r  = malloc(sizeof *r);
     r->kind        = JMAL_ROTATE_ARG;
-    r->arg_name    = strdup(arg_name);
+    r->argRef      = arg_ref;
     return r;
 }
 
 static inline void jmal_rotate_free(JmalRotate *r)
 {
     if (!r) return;
-    if (r->kind == JMAL_ROTATE_ARG)
-        free(r->arg_name);
     free(r);
 }
 
@@ -384,183 +398,190 @@ static inline void jmal_instr_free(JmalInstruction *i)
  * %arg %N : type, type, ...
  */
 struct JmalArgDecl {
-    int                 index;         /* the N in %N, 1-based          */
-    JmalTypeConstraint **constraints;
-    size_t              constraint_count;
-    int                 line;
+    JmalArgRef argRef;            /* the N in %N, 1-based          */
+    JmalTypeConstraintMulti *constraints;
+    int line;
 };
 
-static inline JmalArgDecl *jmal_arg_decl_new(int index, int line)
+static inline JmalArgDecl *jmal_arg_decl_new(JmalArgRef arg_ref, JmalTypeConstraintMulti *tc, int line)
 {
     JmalArgDecl *a      = malloc(sizeof *a);
-    a->index            = index;
-    a->constraints      = NULL;
-    a->constraint_count = 0;
+    a->argRef           = arg_ref;
+    a->constraints      = tc;
     a->line             = line;
     return a;
-}
-
-static inline void jmal_arg_decl_add(JmalArgDecl *a, JmalTypeConstraint *t)
-{
-    a->constraints = realloc(a->constraints, (a->constraint_count + 1) * sizeof *a->constraints);
-    a->constraints[a->constraint_count++] = t;
 }
 
 static inline void jmal_arg_decl_free(JmalArgDecl *a)
 {
     if (!a) return;
-    for (size_t i = 0; i < a->constraint_count; i++)
-        jmal_type_free(a->constraints[i]);
-    free(a->constraints);
+    jmal_type_multi_free(a->constraints);
     free(a);
 }
 
-typedef enum {
-    JMAL_BLOCK_REP,    /* %rep N / %rep %0 … %endrep */
-    JMAL_BLOCK_USE,    /* %use <name> [args…]         */
-    JMAL_BLOCK_LIT
-    /* add new block kinds here, e.g. JMAL_BLOCK_IF, JMAL_BLOCK_WHILE */
-} JmalBlockKind;
-
-/*
- * %rep N / %rep %0 … %endrep
- *
- *   use_arg_count  — 1 = %rep %0 (use macro arg-count),  0 = %rep <literal N>
- *   count          — literal repeat count (valid when use_arg_count == 0)
- *   rotates        — array of %rotate directives in source order
- *   rotate_count   — number of %rotate entries
- */
 struct JmalRepBlock {
-    int          use_arg_count;
-    int          count;
-    JmalRotate **rotates;
-    size_t       rotate_count;
-};
-
-static inline void jmal_rep_init(JmalRepBlock *r, int use_arg_count, int count)
-{
-    r->use_arg_count = use_arg_count;
-    r->count         = count;
-    r->rotates       = NULL;
-    r->rotate_count  = 0;
-}
-
-static inline void jmal_rep_add_rotate(JmalRepBlock *r, JmalRotate *rot)
-{
-    r->rotates = realloc(r->rotates, (r->rotate_count + 1) * sizeof *r->rotates);
-    r->rotates[r->rotate_count++] = rot;
-}
-
-static inline void jmal_rep_cleanup(JmalRepBlock *r)
-{
-    for (size_t i = 0; i < r->rotate_count; i++)
-        jmal_rotate_free(r->rotates[i]);
-    free(r->rotates);
-}
-
-/*
- * General block node.  The `kind` field says which block construct this is.
- * Kind-specific data is stored in the `rep` / `use` union member.
- */
-struct JmalBlock {
-    JmalBlockKind kind;
-
-    /* body: interleaved instructions (shared by all block kinds) */
-    JmalInstruction **instrs;
-    size_t            instr_count;
-
-    union {
-        JmalRepBlock rep; /* JMAL_BLOCK_REP */
-        JmalUse     *use; /* JMAL_BLOCK_USE */
-    };
+    JmalStatementMulti *statements;
     int line;
 };
 
-static inline JmalBlock *jmal_block_new_rep(int use_arg_count, int count, int line)
-{
-    JmalBlock *b = malloc(sizeof *b);
-    b->kind      = JMAL_BLOCK_REP;
-    b->instrs    = NULL;
-    b->instr_count = 0;
-    b->line      = line;
-    jmal_rep_init(&b->rep, use_arg_count, count);
-    return b;
-}
-
-static inline JmalBlock *jmal_block_new_use(JmalUse *use, int line)
-{
-    JmalBlock *b = malloc(sizeof *b);
-    b->kind      = JMAL_BLOCK_USE;
-    b->instrs    = NULL;
-    b->instr_count = 0;
-    b->line      = line;
-    b->use       = use;
-    return b;
-}
-
-static inline void jmal_block_add_instr(JmalBlock *r, JmalInstruction *i)
-{
-    r->instrs = realloc(r->instrs, (r->instr_count + 1) * sizeof *r->instrs);
-    r->instrs[r->instr_count++] = i;
-}
-
-static inline void jmal_block_add_rotate(JmalBlock *b, JmalRotate *rot)
-{
-    jmal_rep_add_rotate(&b->rep, rot); /* only valid for JMAL_BLOCK_REP */
-}
-
-static inline void jmal_block_free(JmalBlock *b)
-{
-    if (!b) return;
-    for (size_t i = 0; i < b->instr_count; i++)
-        jmal_instr_free(b->instrs[i]);
-    free(b->instrs);
-    switch (b->kind) {
-        case JMAL_BLOCK_REP: jmal_rep_cleanup(&b->rep); break;
-        case JMAL_BLOCK_USE: jmal_use_free(b->use);     break;
-        case JMAL_BLOCK_LIT:                            break; /* no extra data */
-    }
-    free(b);
-}
-
-/*
- * A single item inside a macro body — either an arg decl, a rep block,
- * or an instruction.
- */
 typedef enum {
-    JMAL_BODY_ARG_DECL,
-    JMAL_BODY_BLOCK,
-    JMAL_BODY_INSTR
-} JmalBodyItemKind;
+    JMAL_STATEMENT_ARG_DECL,
+    JMAL_STATEMENT_TYPEDEF,
+    JMAL_STATEMENT_DEFINE,
+    JMAL_STATEMENT_ROTATE,
+    JMAL_STATEMENT_INSTR,
+    JMAL_STATEMENT_REP,
+    JMAL_STATEMENT_USE
+} JmalStatementType;
 
-typedef struct {
-    JmalBodyItemKind kind;
+struct JmalStatement {
+    JmalStatementType kind;
+
     union {
         JmalArgDecl     *arg;
-        JmalBlock       *block;
+        JmalTypeDef     *type;
+        JmalDefine      *def;
+        JmalRotate      *rotate;
         JmalInstruction *instr;
+        JmalRepBlock    *rep;
+        JmalUse         *use;
     };
-} JmalBodyItem;
+};
 
-static inline void jmal_body_item_free(JmalBodyItem *item)
+/* ── JmalStatement constructors ──────────────────────────────────────── */
+
+static inline JmalStatement *jmal_stmt_arg(JmalArgDecl *a)
 {
-    if (!item) return;
-    switch (item->kind) {
-        case JMAL_BODY_ARG_DECL: jmal_arg_decl_free(item->arg);    break;
-        case JMAL_BODY_BLOCK:    jmal_block_free(item->block);      break;
-        case JMAL_BODY_INSTR:    jmal_instr_free(item->instr);      break;
-    }
-    free(item);
+    JmalStatement *s = malloc(sizeof *s);
+    s->kind = JMAL_STATEMENT_ARG_DECL;
+    s->arg  = a;
+    return s;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
- * %macro / %macro.strict
- *
- * %use <table>          ← optional, recorded here
- * %macro[.strict] <name> <arity>
- *     <body items>
- * %endmacro
- * ═══════════════════════════════════════════════════════════════════════ */
+static inline JmalStatement *jmal_stmt_typedef(JmalTypeDef *t)
+{
+    JmalStatement *s = malloc(sizeof *s);
+    s->kind = JMAL_STATEMENT_TYPEDEF;
+    s->type = t;
+    return s;
+}
+
+static inline JmalStatement *jmal_stmt_define(JmalDefine *d)
+{
+    JmalStatement *s = malloc(sizeof *s);
+    s->kind = JMAL_STATEMENT_DEFINE;
+    s->def  = d;
+    return s;
+}
+
+static inline JmalStatement *jmal_stmt_rotate(JmalRotate *r)
+{
+    JmalStatement *s  = malloc(sizeof *s);
+    s->kind   = JMAL_STATEMENT_ROTATE;
+    s->rotate = r;
+    return s;
+}
+
+static inline JmalStatement *jmal_stmt_instr(JmalInstruction *i)
+{
+    JmalStatement *s = malloc(sizeof *s);
+    s->kind  = JMAL_STATEMENT_INSTR;
+    s->instr = i;
+    return s;
+}
+
+static inline JmalStatement *jmal_stmt_rep(JmalRepBlock *r)
+{
+    JmalStatement *s = malloc(sizeof *s);
+    s->kind = JMAL_STATEMENT_REP;
+    s->rep  = r;
+    return s;
+}
+
+static inline JmalStatement *jmal_stmt_use(JmalUse *u)
+{
+    JmalStatement *s = malloc(sizeof *s);
+    s->kind = JMAL_STATEMENT_USE;
+    s->use  = u;
+    return s;
+}
+
+/* Forward declaration needed because jmal_stmt_free and jmal_rep_free
+ * are mutually recursive (rep owns statements, statements may own reps). */
+static inline void jmal_stmt_free(JmalStatement *s);
+
+/* ── JmalStatementMulti ───────────────────────────────────────────────── */
+
+struct JmalStatementMulti {
+    JmalStatement **stmts;
+    size_t          stmt_count;
+};
+
+static inline JmalStatementMulti *jmal_stmt_make_multi(JmalStatement *s)
+{
+    JmalStatementMulti *m = malloc(sizeof *m);
+    m->stmt_count = 0;
+    m->stmts      = NULL;
+    m->stmts      = realloc(m->stmts, (m->stmt_count + 1) * sizeof *m->stmts);
+    m->stmts[m->stmt_count++] = s;
+    return m;
+}
+
+static inline void jmal_stmt_multi_add(JmalStatementMulti *m, JmalStatement *s)
+{
+    m->stmts = realloc(m->stmts, (m->stmt_count + 1) * sizeof *m->stmts);
+    m->stmts[m->stmt_count++] = s;
+}
+
+static inline void jmal_stmt_multi_free(JmalStatementMulti *m)
+{
+    if (!m) return;
+    for (size_t i = 0; i < m->stmt_count; i++)
+        jmal_stmt_free(m->stmts[i]);
+    free(m->stmts);
+    free(m);
+}
+
+/* ── JmalRepBlock ─────────────────────────────────────────────────────── */
+
+static inline JmalRepBlock *jmal_rep_new(int line)
+{
+    JmalRepBlock *r    = malloc(sizeof *r);
+    r->statements      = NULL;
+    r->line            = line;
+    return r;
+}
+
+static inline void jmal_rep_add_statement_multi(JmalRepBlock *r, JmalStatementMulti *sm)
+{
+    r->statements = sm;
+}
+
+static inline void jmal_rep_free(JmalRepBlock *r)
+{
+    if (!r) return;
+    jmal_stmt_multi_free(r->statements);
+    free(r);
+}
+
+/* ── JmalStatement free ───────────────────────────────────────────────── */
+
+static inline void jmal_stmt_free(JmalStatement *s)
+{
+    if (!s) return;
+    switch (s->kind) {
+        case JMAL_STATEMENT_ARG_DECL: jmal_arg_decl_free(s->arg);    break;
+        case JMAL_STATEMENT_TYPEDEF:  jmal_typedef_free(s->type);     break;
+        case JMAL_STATEMENT_DEFINE:   jmal_define_free(s->def);       break;
+        case JMAL_STATEMENT_ROTATE:   jmal_rotate_free(s->rotate);    break;
+        case JMAL_STATEMENT_INSTR:    jmal_instr_free(s->instr);      break;
+        case JMAL_STATEMENT_REP:      jmal_rep_free(s->rep);          break;
+        case JMAL_STATEMENT_USE:      jmal_use_free(s->use);          break;
+    }
+    free(s);
+}
+
+/* ── JmalMacro ────────────────────────────────────────────────────────── */
 
 struct JmalMacro {
     char   *name;
@@ -569,36 +590,42 @@ struct JmalMacro {
     int     arity_lo;
     int     arity_hi;
 
-    JmalBodyItem **body;
-    size_t         body_count;
+    JmalStatementMulti *statements;
 
     int line;
 };
 
 static inline JmalMacro *jmal_macro_new(const char *name, int arity_lo, int arity_hi, int line)
 {
-    JmalMacro *m  = malloc(sizeof *m);
-    m->name       = strdup(name);
-    m->arity_lo   = arity_lo;
-    m->arity_hi   = arity_hi;
-    m->body       = NULL;
-    m->body_count = 0;
-    m->line       = line;
+    JmalMacro *m   = malloc(sizeof *m);
+    m->name        = strdup(name);
+    m->arity_lo    = arity_lo;
+    m->arity_hi    = arity_hi;
+    m->statements  = NULL;
+    m->line        = line;
     return m;
 }
 
-static inline void jmal_macro_add_body_item(JmalMacro *m, JmalBodyItem *item)
+static inline void jmal_macro_add_statement(JmalMacro *m, JmalStatement *s)
 {
-    m->body = realloc(m->body, (m->body_count + 1) * sizeof *m->body);
-    m->body[m->body_count++] = item;
+    if (!m->statements)
+        m->statements = jmal_stmt_make_multi(s);
+    else
+        jmal_stmt_multi_add(m->statements, s);
+}
+
+static inline void jmal_macro_add_statement_multi(JmalMacro *m, JmalStatementMulti *sm)
+{
+    if(!m->statements)
+        m->statements = sm;
+    else
+        printf("Warning: code for merging multi statements not implemented, skipping this action\n");
 }
 
 static inline void jmal_macro_free(JmalMacro *m)
 {
     if (!m) return;
-    for (size_t i = 0; i < m->body_count; i++)
-        jmal_body_item_free(m->body[i]);
-    free(m->body);
+    jmal_stmt_multi_free(m->statements);
     free(m->name);
     free(m);
 }
@@ -682,6 +709,8 @@ static inline const char *jmal_type_kind_str(JmalTypeKind k)
         case JMAL_TYPE_BUILTIN_STRING:   return "string";
         case JMAL_TYPE_BUILTIN_NUMBER:   return "number";
         case JMAL_TYPE_BUILTIN_ADDRESS:  return "address";
+        case JMAL_TYPE_LIT_INT:          return "<lit int>";
+        case JMAL_TYPE_ARG_REF:          return "<%%arg>";
         case JMAL_TYPE_USER:             return "<user>";
     }
     return "?";
@@ -722,7 +751,7 @@ static inline void jmal_program_dump(const JmalProgram *p)
         JmalMacro *m = p->macros[i];
         printf("  macro '%s' arity %d", m->name, m->arity_lo);
         if (m->arity_hi != m->arity_lo) printf("-%d", m->arity_hi);
-        printf("  [%zu body items]\n", m->body_count);
+        printf("  [%zu statements]\n", m->statements ? m->statements->stmt_count : 0);
     }
 
     printf("\n-- Top-level instructions (%zu) --\n", p->instr_count);
