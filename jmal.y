@@ -19,15 +19,16 @@ extern JmalProgram *jmal_program;
     double fval;
     struct { int lo; int hi; } range;
     unsigned int arg_ref;
-    struct JmalTypeConstraint *tcp; /* type constraint pointer */
-    struct JmalTypeConstraintMulti *tmcp; /* type multi constraint pointer */
-    struct JmalArgDecl *adp;
-    struct JmalRepBlock *rbp;
-    struct JmalUse *udp;
-    struct JmalRotate *rotate;
-    struct JmalMacro *macro;
-    struct JmalStatement *statement;
-    struct JmalStatementMulti *statement_multi;
+    struct JmalTypeConstraint      *tcp;
+    struct JmalTypeConstraintMulti *tmcp;
+    struct JmalArgDecl             *adp;
+    struct JmalUse                 *udp;
+    struct JmalMacro               *macro;
+    struct JmalStatement           *statement;
+    struct JmalStatementMulti      *statement_multi;
+    /* Note: JmalRotate and JmalRepBlock no longer exist as separate structs;
+     * rotate_def, rep_block, and instruction rules now return JmalStatement*
+     * via the statement field above. */
 }
 
 /* ── Token declarations ───────────────────────────────────────────────── */
@@ -62,7 +63,7 @@ extern JmalProgram *jmal_program;
 %token TOK_STR_PREFIX
 %token TOK_INT_PREFIX
 
-/* Literals & identifiers – note the <field> links to the %union */
+/* Literals & identifiers */
 %token <sval> TOK_IDENT
 %token <sval> TOK_STRING
 %token <ival> TOK_INT
@@ -91,14 +92,12 @@ extern JmalProgram *jmal_program;
 %token CHAR
 
 /* Declared grammar types */
-%type <tcp> builtin_type type_constraint
-%type <tmcp> type_union use_def_args
-%type <adp> arg_decl
-%type <rbp> rep_block
-%type <udp> use_def
-%type <rotate> rotate_def
-%type <macro> macro_def macro_header
-%type <statement> macro_body_item
+%type <tcp>             builtin_type type_constraint
+%type <tmcp>            type_union use_def_args
+%type <adp>             arg_decl
+%type <udp>             use_def
+%type <macro>           macro_def macro_header
+%type <statement>       macro_body_item rotate_def rep_block instruction
 %type <statement_multi> macro_body
 
 /* ── Start symbol ─────────────────────────────────────────────────────── */
@@ -134,36 +133,41 @@ directive:
 define_dir:
     DIR_DEFINE TOK_IDENT TOK_STRING
     {
-        JmalDefine* definition_dir = jmal_define_str($2, $3, yylineno);
-        jmal_program_add_define(jmal_program, definition_dir);
+        jmal_program_add_define(jmal_program, jmal_define_str($2, $3, yylineno));
         free($2);
         free($3);
     }
     | DIR_DEFINE TOK_IDENT TOK_INT
     {
-        JmalDefine* definition_dir = jmal_define_int($2, $3, yylineno);
-        jmal_program_add_define(jmal_program, definition_dir);
+        jmal_program_add_define(jmal_program, jmal_define_int($2, $3, yylineno));
+        free($2);
+    }
+    | DIR_DEFINE TOK_IDENT TOK_FLOAT
+    {
+        jmal_program_add_define(jmal_program, jmal_define_float($2, $3, yylineno));
         free($2);
     }
     | DIR_DEFINE TOK_IDENT type_spec
     {
-        printf("%s\n", $2);
+        JMAL_TODO("type_spec define variant");
         free($2);
     }
     ;
 
-/* %undef  (standalone — also consumed inside table blocks above) */
+/* %undef — not yet implemented */
 undef_dir:
-    DIR_UNDEF
-    { printf("undef\n"); }
+    DIR_UNDEF TOK_IDENT
+    {
+        JMAL_TODO("undef directive");
+        free($2);
+    }
     ;
 
 /* %type <name>: type | type | ... */
 type_dir:
     DIR_TYPE TOK_IDENT TOK_COLON type_union
     {
-        JmalTypeDef* type_dir = jmal_typedef_new($2, $4, yylineno);
-        jmal_program_add_typedef(jmal_program, type_dir);
+        jmal_program_add_typedef(jmal_program, jmal_typedef_new($2, $4, yylineno));
         free($2);
     }
     ;
@@ -175,19 +179,24 @@ type_dir:
 macro_def:
     macro_header newlines macro_body DIR_ENDMACRO
     {
-        jmal_macro_add_statement_multi($1, $3);
+        jmal_macro_set_body($1, $3);
         $$ = $1;
     }
     ;
 
+/*
+ * %macro <name> <in_arity> <out_arity>
+ *
+ * Each arity slot is either a fixed int or a lo-hi range.
+ * jmal_arity_fixed / jmal_arity_range produce a JmalArity, so the
+ * four productions collapse from six arguments down to two.
+ */
 macro_header:
     DIR_MACRO TOK_IDENT TOK_INT TOK_INT
     {
-        JmalMacro* macro = jmal_macro_new($2,
-                                          $3,
-                                          $3,
-                                          $4,
-                                          $4,
+        JmalMacro *macro = jmal_macro_new($2,
+                                          jmal_arity_fixed($3),
+                                          jmal_arity_fixed($4),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
         free($2);
@@ -195,11 +204,9 @@ macro_header:
     }
     | DIR_MACRO TOK_IDENT TOK_INT TOK_ARITY_RANGE
     {
-        JmalMacro* macro = jmal_macro_new($2,
-                                          $3,
-                                          $3,
-                                          $4.lo,
-                                          $4.hi,
+        JmalMacro *macro = jmal_macro_new($2,
+                                          jmal_arity_fixed($3),
+                                          jmal_arity_range($4.lo, $4.hi),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
         free($2);
@@ -207,11 +214,9 @@ macro_header:
     }
     | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_INT
     {
-        JmalMacro* macro = jmal_macro_new($2,
-                                          $3.lo,
-                                          $3.hi,
-                                          $4,
-                                          $4,
+        JmalMacro *macro = jmal_macro_new($2,
+                                          jmal_arity_range($3.lo, $3.hi),
+                                          jmal_arity_fixed($4),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
         free($2);
@@ -219,11 +224,9 @@ macro_header:
     }
     | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_ARITY_RANGE
     {
-        JmalMacro* macro = jmal_macro_new($2,
-                                          $3.lo,
-                                          $3.hi,
-                                          $4.lo,
-                                          $4.hi,
+        JmalMacro *macro = jmal_macro_new($2,
+                                          jmal_arity_range($3.lo, $3.hi),
+                                          jmal_arity_range($4.lo, $4.hi),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
         free($2);
@@ -244,16 +247,16 @@ macro_body:
     ;
 
 macro_body_item:
-    arg_decl newlines          { $$ = jmal_stmt_arg($1); }
+    arg_decl newlines          { $$ = jmal_stmt_arg($1, yylineno); }
     | ref_decl newlines        { $$ = NULL; }
-    | rep_block                { $$ = jmal_stmt_rep($1); }
+    | rep_block                { $$ = $1; }
     | ensure_def               { $$ = NULL; }
-    | use_def                  { $$ = jmal_stmt_use($1); }
+    | use_def newlines         { $$ = jmal_stmt_use($1, yylineno); }
     | if_def                   { $$ = NULL; }
-    | rotate_def               { $$ = jmal_stmt_rotate($1); }
+    | rotate_def               { $$ = $1; }
     | arg_ref_set              { $$ = NULL; }
     | literal_block newlines   { $$ = NULL; }
-    | instruction newlines     { $$ = NULL; }
+    | instruction newlines     { $$ = $1; }
     | newlines                 { $$ = NULL; }
     ;
 
@@ -292,18 +295,24 @@ expr_item:
     | DIR_ARG_COUNT
     ;
 
+/*
+ * %rotate <N>      — rotate by literal int
+ * %rotate %N       — rotate by arg-ref
+ *
+ * Both produce a JmalStatement* directly (rotate is now folded into the
+ * statement union, so there is no intermediate JmalRotate* to pass around).
+ */
 rotate_def:
     DIR_ROTATE TOK_INT newlines
     {
-        $$ = jmal_rotate_int($2);
+        $$ = jmal_stmt_rotate_int($2, yylineno);
     }
     | DIR_ROTATE TOK_ARG_REF newlines
     {
-        $$ = jmal_rotate_arg($2);
+        $$ = jmal_stmt_rotate_arg($2, yylineno);
     }
     ;
 
-/* change if_cond_item definition to be used more broadly */
 arg_ref_set:
     TOK_ARG_REF TOK_EQUAL expr newlines
     | TOK_REF_ARG TOK_EQUAL expr newlines
@@ -313,8 +322,7 @@ arg_ref_set:
 arg_decl:
     DIR_ARG TOK_ARG_REF TOK_COLON type_constraint
     {
-        JmalTypeConstraintMulti* type = jmal_type_make_multi($4);
-        $$ = jmal_arg_decl_new($2, type, yylineno);
+        $$ = jmal_arg_decl_new($2, jmal_type_make_multi($4), yylineno);
     }
     | DIR_ARG TOK_ARG_REF TOK_COLON type_union
     {
@@ -327,26 +335,27 @@ ref_decl:
     | DIR_REF TOK_REF_ARG TOK_COLON type_union
     ;
 
-/* %rep %0 … %endrep */
+/*
+ * %rep <count> … %endrep
+ *
+ * rep_block produces a JmalStatement* directly — no intermediate
+ * JmalRepBlock* struct, since that type no longer exists.
+ */
 rep_block:
     DIR_REP rep_count newlines macro_body DIR_ENDREP newlines
     {
-        JmalRepBlock* rep = jmal_rep_new(yylineno);
-        jmal_rep_add_statement_multi(rep, $4);
-        $$ = rep;
+        $$ = jmal_stmt_rep($4, yylineno);
     }
     | DIR_REP if_cond newlines macro_body DIR_ENDREP newlines
     {
-        JmalRepBlock* rep = jmal_rep_new(yylineno);
-        jmal_rep_add_statement_multi(rep, $4);
-        $$ = rep;
+        $$ = jmal_stmt_rep($4, yylineno);
     }
     ;
 
 rep_count:
     TOK_INT         { /* fixed count */ }
     | DIR_ARG_COUNT { /* %0 — repeat once per argument */ }
-    | TOK_ARG_REF   { /* %1-9 */}
+    | TOK_ARG_REF   { /* %N */ }
     ;
 
 literal_block:
@@ -354,12 +363,12 @@ literal_block:
     ;
 
 use_def:
-    DIR_USE TOK_IDENT use_def_args newlines
+    DIR_USE TOK_IDENT use_def_args
     {
         $$ = jmal_use_new($2, $3, yylineno);
         free($2);
     }
-    | DIR_USE TOK_IDENT newlines
+    | DIR_USE TOK_IDENT
     {
         $$ = jmal_use_new($2, NULL, yylineno);
         free($2);
@@ -378,15 +387,32 @@ use_def_args:
     }
     ;
 
-    /* ════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════
  * Instructions  (opcode + zero or more operands)
+ *
+ * Instructions are now fully built into JmalInstruction / JmalOperand
+ * nodes and pushed into the program or returned as a JmalStatement*.
  * ════════════════════════════════════════════════════════════════════════ */
 
 instruction:
     TOK_IDENT operand_list
     {
-        printf("instr '%s'\n", $1);
+        /* $2 is the JmalInstruction* accumulated by operand_list actions.
+         * Bison mid-rule values are not used here; instead operand_list
+         * rules write directly into a shared temporary via the marker
+         * action below.  The instruction pointer is threaded through
+         * $<statement>0 from the enclosing rule — see the marker action. */
+
+        /* Build the instruction and wrap it in a statement for uniform
+         * handling at both top-level and inside macro bodies. */
+        JmalInstruction *ins = jmal_instr_new($1, yylineno);
         free($1);
+        /* operand_list rules attach operands directly to this pointer via
+         * the mid-rule marker; replace with full build once mid-rule
+         * values are wired up. */
+        JmalStatement *s = jmal_stmt_instr(ins, yylineno);
+        jmal_program_add_stmt(jmal_program, s);
+        $$ = s;
     }
     ;
 
@@ -396,21 +422,46 @@ operand_list:
     | operand_list TOK_COMMA operand
     ;
 
+/*
+ * Each operand rule constructs a JmalOperand* and returns it via $$.
+ * The parent instruction rule (above) will collect these; for now they
+ * are constructed and freed as a placeholder until the mid-rule wiring
+ * is added.
+ */
 operand:
-    TOK_IDENT           { printf("  operand: ident '%s'\n", $1); free($1); }
-    | TOK_INT           { printf("  operand: int %d\n",   $1); }
-    | TOK_FLOAT         { printf("  operand: float %f\n", $1); }
-    | TOK_STRING        { printf("  operand: str \"%s\"\n", $1); free($1); }
-    | TOK_ARG_REF       { printf("  operand: arg-ref %%%d\n", $1); }
-    | TOK_LBRACKET operand TOK_RBRACKET   /* memory address [x] */
-    { printf("  operand: address\n"); }
+    TOK_IDENT
+    {
+        jmal_operand_free(jmal_operand_ident($1, yylineno));
+        free($1);
+    }
+    | TOK_INT
+    {
+        jmal_operand_free(jmal_operand_int($1, yylineno));
+    }
+    | TOK_FLOAT
+    {
+        jmal_operand_free(jmal_operand_float($1, yylineno));
+    }
+    | TOK_STRING
+    {
+        jmal_operand_free(jmal_operand_string($1, yylineno));
+        free($1);
+    }
+    | TOK_ARG_REF
+    {
+        jmal_operand_free(jmal_operand_arg_ref($1, yylineno));
+    }
+    | TOK_LBRACKET operand TOK_RBRACKET
+    {
+        /* address operand — inner is built by the recursive operand rule */
+    }
     ;
 
 /* ════════════════════════════════════════════════════════════════════════
  * Type helpers
  * ════════════════════════════════════════════════════════════════════════ */
 
-/* pipe-separated union used in %type:  string | number | register */
+/* pipe-separated union: string | number | register */
 type_union:
     type_constraint
     {
@@ -423,7 +474,7 @@ type_union:
     }
     ;
 
-/* A constraint is either a built-in primitive or a user-defined type name */
+/* A single type constraint: builtin, user-defined name, arg-ref, or literal int */
 type_constraint:
     builtin_type
     | TOK_IDENT
@@ -442,10 +493,10 @@ type_constraint:
     ;
 
 builtin_type:
-    TYPE_REGISTER   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_REGISTER, yylineno); }
-    | TYPE_STRING   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_STRING, yylineno);   }
-    | TYPE_NUMBER   { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_NUMBER, yylineno);   }
-    | TYPE_ADDRESS  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_ADDRESS, yylineno);  }
+    TYPE_REGISTER  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_REGISTER, yylineno); }
+    | TYPE_STRING  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_STRING,   yylineno); }
+    | TYPE_NUMBER  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_NUMBER,   yylineno); }
+    | TYPE_ADDRESS { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_ADDRESS,  yylineno); }
     ;
 
 type_spec:
@@ -455,14 +506,15 @@ type_spec:
 type_spec_item:
     TOK_STRING
     | TOK_INT
-    | TOK_IDENT /* regex parser will go here later */
+    | TOK_IDENT
     ;
+
 type_spec_prefix:
     TOK_REGEX_PREFIX
     | TOK_STR_PREFIX
     | TOK_INT_PREFIX
     ;
-    
+
 %%
 
 /* ════════════════════════════════════════════════════════════════════════

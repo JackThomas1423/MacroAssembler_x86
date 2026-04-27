@@ -1,10 +1,10 @@
 
-%define MINUS  str("-")
-%define PLUS   str("+")
-%define MULT   str("*")
-%define DIV    str("/")
+%define MINUS  "-"
+%define PLUS   "+"
+%define MULT   "*"
+%define DIV    "/"
 
-%define MY_INT int(1234)
+%define MY_INT 1234
 
 %type func: PLUS | MINUS | MULT | DIV
 
@@ -16,9 +16,9 @@
 %endmacro
 
 %macro equ 3 1
-    %arg %1 : my_int
+    %arg %1 : number
     %arg %2 : func
-    %arg %3 : my_int
+    %arg %3 : number
 
     %ref &1 : number
 
