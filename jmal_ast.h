@@ -587,22 +587,27 @@ struct JmalMacro {
     char   *name;
 
     /* arity: fixed (lo == hi) or range (lo != hi) */
-    int     arity_lo;
-    int     arity_hi;
+    int arity_in_lo;
+    int arity_in_hi;
+
+    int arity_out_lo;
+    int arity_out_hi;
 
     JmalStatementMulti *statements;
 
     int line;
 };
 
-static inline JmalMacro *jmal_macro_new(const char *name, int arity_lo, int arity_hi, int line)
+static inline JmalMacro *jmal_macro_new(const char *name, int in_lo, int in_hi, int out_lo, int out_hi, int line)
 {
-    JmalMacro *m   = malloc(sizeof *m);
-    m->name        = strdup(name);
-    m->arity_lo    = arity_lo;
-    m->arity_hi    = arity_hi;
-    m->statements  = NULL;
-    m->line        = line;
+    JmalMacro *m       = malloc(sizeof *m);
+    m->name            = strdup(name);
+    m->arity_in_lo     = in_lo;
+    m->arity_in_hi     = in_hi;
+    m->arity_out_lo    = out_lo;
+    m->arity_out_hi    = out_hi;
+    m->statements      = NULL;
+    m->line            = line;
     return m;
 }
 
@@ -749,8 +754,8 @@ static inline void jmal_program_dump(const JmalProgram *p)
     printf("\n-- Macros (%zu) --\n", p->macro_count);
     for (size_t i = 0; i < p->macro_count; i++) {
         JmalMacro *m = p->macros[i];
-        printf("  macro '%s' arity %d", m->name, m->arity_lo);
-        if (m->arity_hi != m->arity_lo) printf("-%d", m->arity_hi);
+        printf("  macro '%s' arity %d", m->name, m->arity_in_lo);
+        if (m->arity_in_hi != m->arity_in_lo) printf("-%d", m->arity_in_hi);
         printf("  [%zu statements]\n", m->statements ? m->statements->stmt_count : 0);
     }
 

@@ -13,6 +13,7 @@ extern JmalProgram *jmal_program;
 %}
 
 %union {
+    char   cval;
     char  *sval;
     int    ival;
     double fval;
@@ -57,6 +58,10 @@ extern JmalProgram *jmal_program;
 %token TYPE_NUMBER
 %token TYPE_ADDRESS
 
+%token TOK_REGEX_PREFIX
+%token TOK_STR_PREFIX
+%token TOK_INT_PREFIX
+
 /* Literals & identifiers – note the <field> links to the %union */
 %token <sval> TOK_IDENT
 %token <sval> TOK_STRING
@@ -83,6 +88,7 @@ extern JmalProgram *jmal_program;
 %token TOK_MINUS
 %token TOK_STAR
 %token TOK_SLASH
+%token CHAR
 
 /* Declared grammar types */
 %type <tcp> builtin_type type_constraint
@@ -139,6 +145,11 @@ define_dir:
         jmal_program_add_define(jmal_program, definition_dir);
         free($2);
     }
+    | DIR_DEFINE TOK_IDENT type_spec
+    {
+        printf("%s\n", $2);
+        free($2);
+    }
     ;
 
 /* %undef  (standalone — also consumed inside table blocks above) */
@@ -170,16 +181,50 @@ macro_def:
     ;
 
 macro_header:
-    DIR_MACRO TOK_IDENT TOK_INT
+    DIR_MACRO TOK_IDENT TOK_INT TOK_INT
     {
-        JmalMacro* macro = jmal_macro_new($2, $3, $3, yylineno);
+        JmalMacro* macro = jmal_macro_new($2,
+                                          $3,
+                                          $3,
+                                          $4,
+                                          $4,
+                                          yylineno);
         jmal_program_add_macro(jmal_program, macro);
         free($2);
         $$ = macro;
     }
-    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE
+    | DIR_MACRO TOK_IDENT TOK_INT TOK_ARITY_RANGE
     {
-        JmalMacro* macro = jmal_macro_new($2, $3.lo, $3.hi, yylineno);
+        JmalMacro* macro = jmal_macro_new($2,
+                                          $3,
+                                          $3,
+                                          $4.lo,
+                                          $4.hi,
+                                          yylineno);
+        jmal_program_add_macro(jmal_program, macro);
+        free($2);
+        $$ = macro;
+    }
+    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_INT
+    {
+        JmalMacro* macro = jmal_macro_new($2,
+                                          $3.lo,
+                                          $3.hi,
+                                          $4,
+                                          $4,
+                                          yylineno);
+        jmal_program_add_macro(jmal_program, macro);
+        free($2);
+        $$ = macro;
+    }
+    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_ARITY_RANGE
+    {
+        JmalMacro* macro = jmal_macro_new($2,
+                                          $3.lo,
+                                          $3.hi,
+                                          $4.lo,
+                                          $4.hi,
+                                          yylineno);
         jmal_program_add_macro(jmal_program, macro);
         free($2);
         $$ = macro;
@@ -403,6 +448,21 @@ builtin_type:
     | TYPE_ADDRESS  { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_ADDRESS, yylineno);  }
     ;
 
+type_spec:
+    type_spec_prefix TOK_LPAREN type_spec_item TOK_RPAREN
+    ;
+
+type_spec_item:
+    TOK_STRING
+    | TOK_INT
+    | TOK_IDENT /* regex parser will go here later */
+    ;
+type_spec_prefix:
+    TOK_REGEX_PREFIX
+    | TOK_STR_PREFIX
+    | TOK_INT_PREFIX
+    ;
+    
 %%
 
 /* ════════════════════════════════════════════════════════════════════════
