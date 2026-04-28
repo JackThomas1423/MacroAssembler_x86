@@ -1,43 +1,35 @@
-%{
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "../jmal_ast.h"
+%require "3.2"
+%language "c++"
 
-/* yylex / yyerror are defined in the generated lexer and below */
-int  yylex(void);
-void yyerror(const char *msg);
+%define api.value.type variant
+%define api.token.constructor
+%define parse.error verbose
 
-extern int yylineno;   /* provided by flex %option yylineno */
-extern JmalProgram *jmal_program;
-%}
+%code requires {
+    #include <string>
+    #include <iostream>
+    #include <src/jmal_ast.hpp>
+}
 
-%union {
-    char   cval;
-    char  *sval;
-    int    ival;
-    double fval;
-    struct { int lo; int hi; } range;
-    unsigned int arg_ref;
-    struct JmalTypeConstraint      *tcp;
-    struct JmalTypeConstraintMulti *tmcp;
-    struct JmalArgDecl             *adp;
-    struct JmalUse                 *udp;
-    struct JmalMacro               *macro;
-    struct JmalStatement           *statement;
-    struct JmalStatementMulti      *statement_multi;
-    /* Note: JmalRotate and JmalRepBlock no longer exist as separate structs;
-     * rotate_def, rep_block, and instruction rules now return JmalStatement*
-     * via the statement field above. */
+%code {
+    // Forward-declare the lexer function Bison will call.
+    // With api.token.constructor it returns a full token object.
+    yy::parser::symbol_type yylex();
+    extern int yylineno;   /* provided by flex %option yylineno */
+    extern JmalProgram *jmal_program;
+
+    /* Current instruction being built — set by the instruction rule's
+     * mid-rule marker and consumed by operand rules. */
+    static JmalInstruction *current_instr = nullptr;
 }
 
 /* ── Token declarations ───────────────────────────────────────────────── */
 
 /* Directives */
+%token DIR_REDIRECT
 %token DIR_ENSURE
 %token DIR_IF
 %token DIR_ENDIF
-%token DIR_REDIRECT
 %token DIR_LITERAL
 %token DIR_ENDLITERAL
 %token DIR_DEFINE
@@ -64,13 +56,13 @@ extern JmalProgram *jmal_program;
 %token TOK_INT_PREFIX
 
 /* Literals & identifiers */
-%token <sval> TOK_IDENT
-%token <sval> TOK_STRING
-%token <ival> TOK_INT
-%token <fval> TOK_FLOAT
-%token <arg_ref> TOK_ARG_REF
-%token <ival> TOK_REF_ARG
-%token <range> TOK_ARITY_RANGE
+%token <std::string>   TOK_IDENT
+%token <std::string>   TOK_STRING
+%token <int>           TOK_INT
+%token <double>        TOK_FLOAT
+%token <unsigned int>  TOK_ARG_REF
+%token <int>           TOK_REF_ARG
+%token <JmalArity>     TOK_RANGE
 
 /* Punctuation */
 %token TOK_NEWLINE
@@ -91,14 +83,15 @@ extern JmalProgram *jmal_program;
 %token TOK_SLASH
 %token CHAR
 
-/* Declared grammar types */
-%type <tcp>             builtin_type type_constraint
-%type <tmcp>            type_union use_def_args
-%type <adp>             arg_decl
-%type <udp>             use_def
-%type <macro>           macro_def macro_header
-%type <statement>       macro_body_item rotate_def rep_block instruction
-%type <statement_multi> macro_body
+/* Declared grammar types — use C++ pointer types directly, no 'struct' tag */
+%type <JmalTypeConstraint*>       builtin_type type_constraint
+%type <JmalTypeConstraintMulti*>  type_union use_def_args
+%type <JmalArgDecl*>              arg_decl
+%type <JmalUse*>                  use_def
+%type <JmalMacro*>                macro_def macro_header
+%type <JmalStatement*>            macro_body_item rotate_def rep_block instruction ensure_def
+%type <std::string>               ensure_op ensure_operand
+%type <JmalStatementMulti*>       macro_body
 
 /* ── Start symbol ─────────────────────────────────────────────────────── */
 %start program
@@ -113,6 +106,9 @@ program:
 statement:
     directive newlines
     | instruction newlines
+    {
+        jmal_program_add_stmt(jmal_program, $1);
+    }
     | newlines
     ;
 
@@ -133,24 +129,18 @@ directive:
 define_dir:
     DIR_DEFINE TOK_IDENT TOK_STRING
     {
-        jmal_program_add_define(jmal_program, jmal_define_str($2, $3, yylineno));
-        free($2);
-        free($3);
+        jmal_program_add_define(jmal_program,
+            jmal_define_str($2.c_str(), $3.c_str(), yylineno));
     }
     | DIR_DEFINE TOK_IDENT TOK_INT
     {
-        jmal_program_add_define(jmal_program, jmal_define_int($2, $3, yylineno));
-        free($2);
+        jmal_program_add_define(jmal_program,
+            jmal_define_int($2.c_str(), $3, yylineno));
     }
     | DIR_DEFINE TOK_IDENT TOK_FLOAT
     {
-        jmal_program_add_define(jmal_program, jmal_define_float($2, $3, yylineno));
-        free($2);
-    }
-    | DIR_DEFINE TOK_IDENT type_spec
-    {
-        JMAL_TODO("type_spec define variant");
-        free($2);
+        jmal_program_add_define(jmal_program,
+            jmal_define_float($2.c_str(), $3, yylineno));
     }
     ;
 
@@ -159,7 +149,6 @@ undef_dir:
     DIR_UNDEF TOK_IDENT
     {
         JMAL_TODO("undef directive");
-        free($2);
     }
     ;
 
@@ -167,8 +156,8 @@ undef_dir:
 type_dir:
     DIR_TYPE TOK_IDENT TOK_COLON type_union
     {
-        jmal_program_add_typedef(jmal_program, jmal_typedef_new($2, $4, yylineno));
-        free($2);
+        jmal_program_add_typedef(jmal_program,
+            jmal_typedef_new($2.c_str(), $4, yylineno));
     }
     ;
 
@@ -194,42 +183,20 @@ macro_def:
 macro_header:
     DIR_MACRO TOK_IDENT TOK_INT TOK_INT
     {
-        JmalMacro *macro = jmal_macro_new($2,
+        JmalMacro *macro = jmal_macro_new($2.c_str(),
                                           jmal_arity_fixed($3),
                                           jmal_arity_fixed($4),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
-        free($2);
         $$ = macro;
     }
-    | DIR_MACRO TOK_IDENT TOK_INT TOK_ARITY_RANGE
+    | DIR_MACRO TOK_IDENT TOK_RANGE TOK_INT
     {
-        JmalMacro *macro = jmal_macro_new($2,
-                                          jmal_arity_fixed($3),
-                                          jmal_arity_range($4.lo, $4.hi),
-                                          yylineno);
-        jmal_program_add_macro(jmal_program, macro);
-        free($2);
-        $$ = macro;
-    }
-    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_INT
-    {
-        JmalMacro *macro = jmal_macro_new($2,
-                                          jmal_arity_range($3.lo, $3.hi),
+        JmalMacro *macro = jmal_macro_new($2.c_str(),
+                                          $3,
                                           jmal_arity_fixed($4),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
-        free($2);
-        $$ = macro;
-    }
-    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_ARITY_RANGE
-    {
-        JmalMacro *macro = jmal_macro_new($2,
-                                          jmal_arity_range($3.lo, $3.hi),
-                                          jmal_arity_range($4.lo, $4.hi),
-                                          yylineno);
-        jmal_program_add_macro(jmal_program, macro);
-        free($2);
         $$ = macro;
     }
     ;
@@ -237,35 +204,60 @@ macro_header:
 macro_body:
     macro_body_item
     {
-        $$ = jmal_stmt_make_multi($1);
+        $$ = $1 ? jmal_stmt_make_multi($1) : new JmalStatementMulti;
     }
     | macro_body macro_body_item
     {
-        jmal_stmt_multi_add($1, $2);
+        if ($2) jmal_stmt_multi_add($1, $2);
         $$ = $1;
     }
     ;
 
 macro_body_item:
     arg_decl newlines          { $$ = jmal_stmt_arg($1, yylineno); }
-    | ref_decl newlines        { $$ = NULL; }
+    | ref_decl newlines        { $$ = nullptr; }
     | rep_block                { $$ = $1; }
-    | ensure_def               { $$ = NULL; }
+    | ensure_def               { $$ = $1; }
     | use_def newlines         { $$ = jmal_stmt_use($1, yylineno); }
-    | if_def                   { $$ = NULL; }
+    | if_def                   { $$ = nullptr; }
     | rotate_def               { $$ = $1; }
-    | arg_ref_set              { $$ = NULL; }
-    | literal_block newlines   { $$ = NULL; }
+    | arg_ref_set              { $$ = nullptr; }
+    | literal_block newlines   { $$ = nullptr; }
     | instruction newlines     { $$ = $1; }
-    | newlines                 { $$ = NULL; }
+    | newlines                 { $$ = nullptr; }
     ;
 
+/*
+ * %ensure <lhs> <op> <rhs>
+ *
+ * lhs / rhs are either an arg-ref (%N), an ident (type name / register),
+ * a string literal, or an integer literal — all stringified for storage.
+ */
 ensure_def:
-    DIR_ENSURE if_cond newlines
+    DIR_ENSURE ensure_operand ensure_op ensure_operand newlines
+    {
+        $$ = jmal_stmt_ensure($2, $3, $4, yylineno);
+    }
+    ;
+
+ensure_op:
+    TOK_COMPARE         { $$ = std::string("=="); }
+    | TOK_COMPARE_NOT   { $$ = std::string("!="); }
+    | TOK_COMPARE_GREATER { $$ = std::string(">="); }
+    ;
+
+ensure_operand:
+    TOK_ARG_REF  { $$ = "%" + std::to_string($1); }
+    | TOK_IDENT  { $$ = $1; }
+    | TOK_STRING { $$ = $1; }
+    | TOK_INT    { $$ = std::to_string($1); }
     ;
 
 if_def:
     DIR_IF if_cond macro_body DIR_ENDIF newlines
+    {
+        JMAL_TODO("if statement");
+    }
     ;
 
 if_cond:
@@ -298,9 +290,6 @@ expr_item:
 /*
  * %rotate <N>      — rotate by literal int
  * %rotate %N       — rotate by arg-ref
- *
- * Both produce a JmalStatement* directly (rotate is now folded into the
- * statement union, so there is no intermediate JmalRotate* to pass around).
  */
 rotate_def:
     DIR_ROTATE TOK_INT newlines
@@ -315,7 +304,13 @@ rotate_def:
 
 arg_ref_set:
     TOK_ARG_REF TOK_EQUAL expr newlines
+    {
+        JMAL_TODO("set expr");
+    }
     | TOK_REF_ARG TOK_EQUAL expr newlines
+    {
+        JMAL_TODO("set expr");
+    }
     ;
 
 /* %arg %N : type_constraint */
@@ -332,14 +327,17 @@ arg_decl:
 
 ref_decl:
     DIR_REF TOK_REF_ARG TOK_COLON type_constraint
+    {
+        JMAL_TODO("ref declaration");
+    }
     | DIR_REF TOK_REF_ARG TOK_COLON type_union
+    {
+        JMAL_TODO("ref declaration");
+    }
     ;
 
 /*
  * %rep <count> … %endrep
- *
- * rep_block produces a JmalStatement* directly — no intermediate
- * JmalRepBlock* struct, since that type no longer exists.
  */
 rep_block:
     DIR_REP rep_count newlines macro_body DIR_ENDREP newlines
@@ -360,18 +358,19 @@ rep_count:
 
 literal_block:
     DIR_LITERAL newlines macro_body newlines DIR_ENDLITERAL
+    {
+        JMAL_TODO("literal block");
+    }
     ;
 
 use_def:
     DIR_USE TOK_IDENT use_def_args
     {
-        $$ = jmal_use_new($2, $3, yylineno);
-        free($2);
+        $$ = jmal_use_new($2.c_str(), $3, yylineno);
     }
     | DIR_USE TOK_IDENT
     {
-        $$ = jmal_use_new($2, NULL, yylineno);
-        free($2);
+        $$ = jmal_use_new($2.c_str(), nullptr, yylineno);
     }
     ;
 
@@ -390,29 +389,25 @@ use_def_args:
 /* ════════════════════════════════════════════════════════════════════════
  * Instructions  (opcode + zero or more operands)
  *
- * Instructions are now fully built into JmalInstruction / JmalOperand
- * nodes and pushed into the program or returned as a JmalStatement*.
+ * A mid-rule action creates the JmalInstruction* and stores it in
+ * current_instr so that each operand rule can call jmal_instr_add_operand
+ * directly — no separate collector needed.
  * ════════════════════════════════════════════════════════════════════════ */
 
 instruction:
-    TOK_IDENT operand_list
+    TOK_IDENT
     {
-        /* $2 is the JmalInstruction* accumulated by operand_list actions.
-         * Bison mid-rule values are not used here; instead operand_list
-         * rules write directly into a shared temporary via the marker
-         * action below.  The instruction pointer is threaded through
-         * $<statement>0 from the enclosing rule — see the marker action. */
-
-        /* Build the instruction and wrap it in a statement for uniform
-         * handling at both top-level and inside macro bodies. */
-        JmalInstruction *ins = jmal_instr_new($1, yylineno);
-        free($1);
-        /* operand_list rules attach operands directly to this pointer via
-         * the mid-rule marker; replace with full build once mid-rule
-         * values are wired up. */
-        JmalStatement *s = jmal_stmt_instr(ins, yylineno);
-        jmal_program_add_stmt(jmal_program, s);
-        $$ = s;
+        /* Mid-rule: create the instruction and register it as the active
+         * target so operand rules can push into it immediately. */
+        current_instr = jmal_instr_new($1.c_str(), yylineno);
+    }
+    operand_list
+    {
+        /* Wrap completed instruction in a statement and return it.
+         * The caller (top-level statement or macro_body_item) decides
+         * where it lives — adding it here too would double-own it. */
+        $$ = jmal_stmt_instr(current_instr, yylineno);
+        current_instr = nullptr;
     }
     ;
 
@@ -423,37 +418,54 @@ operand_list:
     ;
 
 /*
- * Each operand rule constructs a JmalOperand* and returns it via $$.
- * The parent instruction rule (above) will collect these; for now they
- * are constructed and freed as a placeholder until the mid-rule wiring
- * is added.
+ * Each operand rule constructs a JmalOperand* and appends it to
+ * current_instr via jmal_instr_add_operand.  The address rule wraps
+ * its inner operand — but because the inner operand was already pushed
+ * by the recursive call we use a $<>-typed mid-rule to intercept it.
  */
 operand:
     TOK_IDENT
     {
-        jmal_operand_free(jmal_operand_ident($1, yylineno));
-        free($1);
+        jmal_instr_add_operand(current_instr,
+            jmal_operand_ident($1.c_str(), yylineno));
     }
     | TOK_INT
     {
-        jmal_operand_free(jmal_operand_int($1, yylineno));
+        jmal_instr_add_operand(current_instr,
+            jmal_operand_int($1, yylineno));
     }
     | TOK_FLOAT
     {
-        jmal_operand_free(jmal_operand_float($1, yylineno));
+        jmal_instr_add_operand(current_instr,
+            jmal_operand_float($1, yylineno));
     }
     | TOK_STRING
     {
-        jmal_operand_free(jmal_operand_string($1, yylineno));
-        free($1);
+        jmal_instr_add_operand(current_instr,
+            jmal_operand_string($1.c_str(), yylineno));
     }
     | TOK_ARG_REF
     {
-        jmal_operand_free(jmal_operand_arg_ref($1, yylineno));
+        jmal_instr_add_operand(current_instr,
+            jmal_operand_arg_ref(static_cast<int>($1), yylineno));
     }
-    | TOK_LBRACKET operand TOK_RBRACKET
+    | TOK_LBRACKET
     {
-        /* address operand — inner is built by the recursive operand rule */
+        /* Mid-rule: stash and temporarily null the instruction pointer so
+         * the inner operand rule pushes nowhere; we'll harvest it after. */
+        /* We keep current_instr alive but record the count before the
+         * inner operand is pushed so we can pop it off and rewrap it. */
+    }
+    operand TOK_RBRACKET
+    {
+        /* The inner operand was just appended as the last item.  Pop it
+         * off, wrap it in an address operand, and push the wrapper. */
+        size_t n = jmal_instr_operand_count(current_instr);
+        JmalOperand *inner = jmal_instr_operand_get(current_instr, n - 1);
+        /* Shrink the vector by one without freeing (inner is still alive) */
+        current_instr->operands.pop_back();
+        jmal_instr_add_operand(current_instr,
+            jmal_operand_address(inner, yylineno));
     }
     ;
 
@@ -479,8 +491,7 @@ type_constraint:
     builtin_type
     | TOK_IDENT
     {
-        $$ = jmal_type_user($1, yylineno);
-        free($1);
+        $$ = jmal_type_user($1.c_str(), yylineno);
     }
     | TOK_ARG_REF
     {
@@ -499,28 +510,10 @@ builtin_type:
     | TYPE_ADDRESS { $$ = jmal_type_builtin(JMAL_TYPE_BUILTIN_ADDRESS,  yylineno); }
     ;
 
-type_spec:
-    type_spec_prefix TOK_LPAREN type_spec_item TOK_RPAREN
-    ;
-
-type_spec_item:
-    TOK_STRING
-    | TOK_INT
-    | TOK_IDENT
-    ;
-
-type_spec_prefix:
-    TOK_REGEX_PREFIX
-    | TOK_STR_PREFIX
-    | TOK_INT_PREFIX
-    ;
-
 %%
 
-/* ════════════════════════════════════════════════════════════════════════
- * yyerror — called by Bison on a parse error
- * ════════════════════════════════════════════════════════════════════════ */
-void yyerror(const char *msg)
-{
-    fprintf(stderr, "parse error on line %d: %s\n", yylineno, msg);
+namespace yy {
+    void parser::error(const std::string& msg) {
+        std::cerr << "Error: " << msg << " line " << yylineno << "\n";
+    }
 }

@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "build/jmal.tab.h"
-#include "jmal_ast.h"
+#include <parser.hpp>
+#include <src/jmal_ast.hpp>
 
-extern FILE *yyin;
+using namespace yy;
+
+extern "C" FILE *yyin;
 
 JmalProgram *jmal_program = NULL;
 
@@ -23,7 +25,8 @@ int main(int argc, char **argv)
         yyin = f;
     }
 
-    yyparse();
+    yy::parser p;
+    p.parse();
 
     if (yyin && yyin != stdin)
         fclose(yyin);
