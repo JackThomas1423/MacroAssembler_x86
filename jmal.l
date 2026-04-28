@@ -1,22 +1,13 @@
 %{
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "jmal.tab.h"
-
-static char *strip_quotes(const char *s, int len)
-{
-    /* s points at the opening '"', len includes both quotes */
-    char *buf = malloc(len - 1);          /* len-2 chars + NUL */
-    memcpy(buf, s + 1, len - 2);
-    buf[len - 2] = '\0';
-    return buf;
-}
+#include <parser.hpp>
+#include <string>
 
 int yyline = 1;
 int yycol  = 1;
+
+#undef  YY_DECL
+#define YY_DECL yy::parser::symbol_type yylex()
 
 %}
 
@@ -31,9 +22,6 @@ IDENT_START [a-zA-Z_]
 IDENT_CONT  [a-zA-Z0-9_]
 IDENT       {IDENT_START}{IDENT_CONT}*
 DEC_INT     [0-9]+
-HEX_INT     0[xX]{HEXDIGIT}+
-OCT_INT     0[oO][0-7]+
-BIN_INT     0[bB][01]+
 FLOAT       [0-9]+\.[0-9]+([eE][+-]?[0-9]+)?
 STRING      \"([^\"\n\\]|\\.)*\"
 ARG_REF     "%"[0-9]+
@@ -42,78 +30,71 @@ REF_ARG     "&"[0-9]+
 %%
 
 [ \t\r]+            { /* skip horizontal whitespace */ }
-\n                  { return TOK_NEWLINE; }
+\n                  { return yy::parser::make_TOK_NEWLINE();  }
 ;[^\n]*             { /* line comment – discard */ }
 
-"%redirect"         { return DIR_REDIRECT;       }
-"%ensure"           { return DIR_ENSURE;         }
-"%if"               { return DIR_IF;             }
-"%endif"            { return DIR_ENDIF;          }
-"%literal"          { return DIR_LITERAL;        }
-"%endliteral"       { return DIR_ENDLITERAL;     }
-"%define"           { return DIR_DEFINE;         }
-"%undef"            { return DIR_UNDEF;          }
-"%type"             { return DIR_TYPE;           }
-"%use"              { return DIR_USE;            }
-"%macro"            { return DIR_MACRO;          }
-"%endmacro"         { return DIR_ENDMACRO;       }
-"%arg"              { return DIR_ARG;            }
-"%ref"              { return DIR_REF;            }
-"%rep"              { return DIR_REP;            }
-"%endrep"           { return DIR_ENDREP;         }
-"%rotate"           { return DIR_ROTATE;         }
-"%0"                { return DIR_ARG_COUNT;      }  /* total arg count */
+"%redirect"         { return yy::parser::make_DIR_REDIRECT();       }
+"%ensure"           { return yy::parser::make_DIR_ENSURE();         }
+"%if"               { return yy::parser::make_DIR_IF();             }
+"%endif"            { return yy::parser::make_DIR_ENDIF();          }
+"%literal"          { return yy::parser::make_DIR_LITERAL();        }
+"%endliteral"       { return yy::parser::make_DIR_ENDLITERAL();     }
+"%define"           { return yy::parser::make_DIR_DEFINE();         }
+"%undef"            { return yy::parser::make_DIR_UNDEF();          }
+"%type"             { return yy::parser::make_DIR_TYPE();           }
+"%use"              { return yy::parser::make_DIR_USE();            }
+"%macro"            { return yy::parser::make_DIR_MACRO();          }
+"%endmacro"         { return yy::parser::make_DIR_ENDMACRO();       }
+"%arg"              { return yy::parser::make_DIR_ARG();            }
+"%ref"              { return yy::parser::make_DIR_REF();            }
+"%rep"              { return yy::parser::make_DIR_REP();            }
+"%endrep"           { return yy::parser::make_DIR_ENDREP();         }
+"%rotate"           { return yy::parser::make_DIR_ROTATE();         }
+"%0"                { return yy::parser::make_DIR_ARG_COUNT();      }
 
-{ARG_REF}           { yylval.ival = atoi(yytext + 1); return TOK_ARG_REF; }
+{ARG_REF}           { return yy::parser::make_TOK_ARG_REF(std::stoi(yytext + 1)); }
 
-{REF_ARG}           { yylval.ival = atoi(yytext + 1); return TOK_REF_ARG; }
+{REF_ARG}           { return yy::parser::make_TOK_REF_ARG(std::stoi(yytext + 1)); }
 
-"register"          { return TYPE_REGISTER;  }
-"string"            { return TYPE_STRING;    }
-"number"            { return TYPE_NUMBER;    }
-"address"           { return TYPE_ADDRESS;   }
+"register"          { return yy::parser::make_TYPE_REGISTER();  }
+"string"            { return yy::parser::make_TYPE_STRING();    }
+"number"            { return yy::parser::make_TYPE_NUMBER();    }
+"address"           { return yy::parser::make_TYPE_ADDRESS();   }
 
-"regex"             { return TOK_REGEX_PREFIX; }
-"str"               { return TOK_STR_PREFIX;   }
-"int"               { return TOK_INT_PREFIX;   }
+"regex"             { return yy::parser::make_TOK_REGEX_PREFIX(); }
+"str"               { return yy::parser::make_TOK_STR_PREFIX();   }
+"int"               { return yy::parser::make_TOK_INT_PREFIX();   }
 
-{HEX_INT}           { yylval.ival = (int)strtol(yytext + 2, NULL, 16); return TOK_INT; }
+{DEC_INT}             { return yy::parser::make_TOK_INT(std::stod(yytext));      }
 
-{OCT_INT}           { yylval.ival = (int)strtol(yytext + 2, NULL, 8); return TOK_INT; }
+{FLOAT}               { return yy::parser::make_TOK_FLOAT(std::stod(yytext));    }
 
-{BIN_INT}           { yylval.ival = (int)strtol(yytext + 2, NULL, 2); return TOK_INT; }
+{STRING}              { return yy::parser::make_TOK_STRING(std::string(yytext)); }
 
-{DEC_INT}           { yylval.ival = atoi(yytext); return TOK_INT;  }
+{IDENT}               { return yy::parser::make_TOK_IDENT(std::string(yytext));  }
 
-{FLOAT}             { yylval.fval = atof(yytext); return TOK_FLOAT; }
+{DEC_INT}"-"{DEC_INT} {
+                        char *dash = strchr(yytext, '-');
+                        int lo = atoi(yytext);
+                        int hi = atoi(dash + 1);
+                        return yy::parser::make_TOK_RANGE({lo, hi});
+                      }
 
-{STRING}            { yylval.sval = strip_quotes(yytext, yyleng); return TOK_STRING; }
-
-{IDENT}             { yylval.sval = strdup(yytext); return TOK_IDENT; }
-
-{DEC_INT}"-"{DEC_INT}   {
-                            /* Split on '-' */
-                            char *dash = strchr(yytext, '-');
-                            yylval.range.lo = atoi(yytext);
-                            yylval.range.hi = atoi(dash + 1);
-                            return TOK_ARITY_RANGE;
-                        }
-
-","                 { return TOK_COMMA;           }
-":"                 { return TOK_COLON;           }
-"="                 { return TOK_EQUAL;           }
-"=="                { return TOK_COMPARE;         }
-">="                { return TOK_COMPARE_GREATER; }
-"!="                { return TOK_COMPARE_NOT;     }
-"|"                 { return TOK_PIPE;            }
-"["                 { return TOK_LBRACKET;        }
-"]"                 { return TOK_RBRACKET;        }
-"("                 { return TOK_LPAREN;          }
-")"                 { return TOK_RPAREN;          }
-"+"                 { return TOK_PLUS;            }
-"-"                 { return TOK_MINUS;           }
-"*"                 { return TOK_STAR;            }
-"/"                 { return TOK_SLASH;           }
+","                 { return yy::parser::make_TOK_COMMA();           }
+":"                 { return yy::parser::make_TOK_COLON();           }
+"="                 { return yy::parser::make_TOK_EQUAL();           }
+"=="                { return yy::parser::make_TOK_COMPARE();         }
+">="                { return yy::parser::make_TOK_COMPARE_GREATER(); }
+"!="                { return yy::parser::make_TOK_COMPARE_NOT();     }
+"|"                 { return yy::parser::make_TOK_PIPE();            }
+"["                 { return yy::parser::make_TOK_LBRACKET();        }
+"]"                 { return yy::parser::make_TOK_RBRACKET();        }
+"("                 { return yy::parser::make_TOK_LPAREN();          }
+")"                 { return yy::parser::make_TOK_RPAREN();          }
+"+"                 { return yy::parser::make_TOK_PLUS();            }
+"-"                 { return yy::parser::make_TOK_MINUS();           }
+"*"                 { return yy::parser::make_TOK_STAR();            }
+"/"                 { return yy::parser::make_TOK_SLASH();           }
 
     /* ────────────────────────────────────────────────────────── *
      *  Catch-all: illegal character                             *

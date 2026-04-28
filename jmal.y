@@ -1,43 +1,31 @@
-%{
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "../jmal_ast.h"
+%require "3.2"
+%language "c++"
 
-/* yylex / yyerror are defined in the generated lexer and below */
-int  yylex(void);
-void yyerror(const char *msg);
+%define api.value.type variant
+%define api.token.constructor
+%define parse.error verbose
 
-extern int yylineno;   /* provided by flex %option yylineno */
-extern JmalProgram *jmal_program;
-%}
+%code requires {
+    #include <string>
+    #include <iostream>
+    #include "jmal_ast.hpp"
+}
 
-%union {
-    char   cval;
-    char  *sval;
-    int    ival;
-    double fval;
-    struct { int lo; int hi; } range;
-    unsigned int arg_ref;
-    struct JmalTypeConstraint      *tcp;
-    struct JmalTypeConstraintMulti *tmcp;
-    struct JmalArgDecl             *adp;
-    struct JmalUse                 *udp;
-    struct JmalMacro               *macro;
-    struct JmalStatement           *statement;
-    struct JmalStatementMulti      *statement_multi;
-    /* Note: JmalRotate and JmalRepBlock no longer exist as separate structs;
-     * rotate_def, rep_block, and instruction rules now return JmalStatement*
-     * via the statement field above. */
+%code {
+    // Forward-declare the lexer function Bison will call.
+    // With api.token.constructor it returns a full token object.
+    yy::parser::symbol_type yylex();
+    extern int yylineno;   /* provided by flex %option yylineno */
+    extern JmalProgram *jmal_program;
 }
 
 /* ── Token declarations ───────────────────────────────────────────────── */
 
 /* Directives */
+%token DIR_REDIRECT
 %token DIR_ENSURE
 %token DIR_IF
 %token DIR_ENDIF
-%token DIR_REDIRECT
 %token DIR_LITERAL
 %token DIR_ENDLITERAL
 %token DIR_DEFINE
@@ -64,13 +52,13 @@ extern JmalProgram *jmal_program;
 %token TOK_INT_PREFIX
 
 /* Literals & identifiers */
-%token <sval> TOK_IDENT
-%token <sval> TOK_STRING
-%token <ival> TOK_INT
-%token <fval> TOK_FLOAT
-%token <arg_ref> TOK_ARG_REF
-%token <ival> TOK_REF_ARG
-%token <range> TOK_ARITY_RANGE
+%token <std::string> TOK_IDENT
+%token <std::string> TOK_STRING
+%token <int> TOK_INT
+%token <double> TOK_FLOAT
+%token <unsigned int> TOK_ARG_REF
+%token <int> TOK_REF_ARG
+%token <struct JmalArity> TOK_RANGE
 
 /* Punctuation */
 %token TOK_NEWLINE
@@ -92,13 +80,13 @@ extern JmalProgram *jmal_program;
 %token CHAR
 
 /* Declared grammar types */
-%type <tcp>             builtin_type type_constraint
-%type <tmcp>            type_union use_def_args
-%type <adp>             arg_decl
-%type <udp>             use_def
-%type <macro>           macro_def macro_header
-%type <statement>       macro_body_item rotate_def rep_block instruction
-%type <statement_multi> macro_body
+%type <struct JmalTypeConstraint*>       builtin_type type_constraint
+%type <struct JmalTypeConstraintMulti*>  type_union use_def_args
+%type <struct JmalArgDecl*>              arg_decl
+%type <struct JmalUse*>                  use_def
+%type <struct JmalMacro*>                macro_def macro_header
+%type <struct JmalStatement*>            macro_body_item rotate_def rep_block instruction
+%type <struct JmalStatementMulti*>       macro_body
 
 /* ── Start symbol ─────────────────────────────────────────────────────── */
 %start program
@@ -133,24 +121,23 @@ directive:
 define_dir:
     DIR_DEFINE TOK_IDENT TOK_STRING
     {
-        jmal_program_add_define(jmal_program, jmal_define_str($2, $3, yylineno));
-        free($2);
-        free($3);
+        const char* id = $2.c_str();
+        const char* str = $3.c_str();
+        jmal_program_add_define(jmal_program, jmal_define_str(id, str, yylineno));
     }
     | DIR_DEFINE TOK_IDENT TOK_INT
     {
-        jmal_program_add_define(jmal_program, jmal_define_int($2, $3, yylineno));
-        free($2);
+        const char* id = $2.c_str();
+        jmal_program_add_define(jmal_program, jmal_define_int(id, $3, yylineno));
     }
     | DIR_DEFINE TOK_IDENT TOK_FLOAT
     {
-        jmal_program_add_define(jmal_program, jmal_define_float($2, $3, yylineno));
-        free($2);
+        const char* id = $2.c_str();
+        jmal_program_add_define(jmal_program, jmal_define_float(id, $3, yylineno));
     }
     | DIR_DEFINE TOK_IDENT type_spec
     {
         JMAL_TODO("type_spec define variant");
-        free($2);
     }
     ;
 
@@ -159,7 +146,6 @@ undef_dir:
     DIR_UNDEF TOK_IDENT
     {
         JMAL_TODO("undef directive");
-        free($2);
     }
     ;
 
@@ -167,8 +153,8 @@ undef_dir:
 type_dir:
     DIR_TYPE TOK_IDENT TOK_COLON type_union
     {
-        jmal_program_add_typedef(jmal_program, jmal_typedef_new($2, $4, yylineno));
-        free($2);
+        const char* id = $2.c_str();
+        jmal_program_add_typedef(jmal_program, jmal_typedef_new(id, $4, yylineno));
     }
     ;
 
@@ -194,42 +180,22 @@ macro_def:
 macro_header:
     DIR_MACRO TOK_IDENT TOK_INT TOK_INT
     {
-        JmalMacro *macro = jmal_macro_new($2,
+        const char* id = $2.c_str();
+        JmalMacro *macro = jmal_macro_new(id,
                                           jmal_arity_fixed($3),
                                           jmal_arity_fixed($4),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
-        free($2);
         $$ = macro;
     }
-    | DIR_MACRO TOK_IDENT TOK_INT TOK_ARITY_RANGE
+    | DIR_MACRO TOK_IDENT TOK_RANGE TOK_INT
     {
-        JmalMacro *macro = jmal_macro_new($2,
-                                          jmal_arity_fixed($3),
-                                          jmal_arity_range($4.lo, $4.hi),
-                                          yylineno);
-        jmal_program_add_macro(jmal_program, macro);
-        free($2);
-        $$ = macro;
-    }
-    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_INT
-    {
-        JmalMacro *macro = jmal_macro_new($2,
-                                          jmal_arity_range($3.lo, $3.hi),
+        const char* id = $2.c_str();
+        JmalMacro *macro = jmal_macro_new(id,
+                                          $3,
                                           jmal_arity_fixed($4),
                                           yylineno);
         jmal_program_add_macro(jmal_program, macro);
-        free($2);
-        $$ = macro;
-    }
-    | DIR_MACRO TOK_IDENT TOK_ARITY_RANGE TOK_ARITY_RANGE
-    {
-        JmalMacro *macro = jmal_macro_new($2,
-                                          jmal_arity_range($3.lo, $3.hi),
-                                          jmal_arity_range($4.lo, $4.hi),
-                                          yylineno);
-        jmal_program_add_macro(jmal_program, macro);
-        free($2);
         $$ = macro;
     }
     ;
@@ -365,13 +331,13 @@ literal_block:
 use_def:
     DIR_USE TOK_IDENT use_def_args
     {
-        $$ = jmal_use_new($2, $3, yylineno);
-        free($2);
+        const char* id = $2.c_str();
+        $$ = jmal_use_new(id, $3, yylineno);
     }
     | DIR_USE TOK_IDENT
     {
-        $$ = jmal_use_new($2, NULL, yylineno);
-        free($2);
+        const char* id = $2.c_str();
+        $$ = jmal_use_new(id, NULL, yylineno);
     }
     ;
 
@@ -405,8 +371,8 @@ instruction:
 
         /* Build the instruction and wrap it in a statement for uniform
          * handling at both top-level and inside macro bodies. */
-        JmalInstruction *ins = jmal_instr_new($1, yylineno);
-        free($1);
+        const char* id = $1.c_str();
+        JmalInstruction *ins = jmal_instr_new(id, yylineno);
         /* operand_list rules attach operands directly to this pointer via
          * the mid-rule marker; replace with full build once mid-rule
          * values are wired up. */
@@ -431,8 +397,8 @@ operand_list:
 operand:
     TOK_IDENT
     {
-        jmal_operand_free(jmal_operand_ident($1, yylineno));
-        free($1);
+        const char* id = $1.c_str();
+        jmal_operand_free(jmal_operand_ident(id, yylineno));
     }
     | TOK_INT
     {
@@ -444,8 +410,8 @@ operand:
     }
     | TOK_STRING
     {
-        jmal_operand_free(jmal_operand_string($1, yylineno));
-        free($1);
+        const char* id = $1.c_str();
+        jmal_operand_free(jmal_operand_string(id, yylineno));
     }
     | TOK_ARG_REF
     {
@@ -479,8 +445,8 @@ type_constraint:
     builtin_type
     | TOK_IDENT
     {
-        $$ = jmal_type_user($1, yylineno);
-        free($1);
+        const char* id = $1.c_str();
+        $$ = jmal_type_user(id, yylineno);
     }
     | TOK_ARG_REF
     {
@@ -517,10 +483,9 @@ type_spec_prefix:
 
 %%
 
-/* ════════════════════════════════════════════════════════════════════════
- * yyerror — called by Bison on a parse error
- * ════════════════════════════════════════════════════════════════════════ */
-void yyerror(const char *msg)
-{
-    fprintf(stderr, "parse error on line %d: %s\n", yylineno, msg);
+namespace yy {
+    void parser::error(const std::string& msg) {
+        std::cerr << "Error: " << msg << " line " << yylineno << "\n";
+    }
 }
+

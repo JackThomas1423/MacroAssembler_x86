@@ -1,5 +1,5 @@
-#ifndef JMAL_AST_H
-#define JMAL_AST_H
+#ifndef JMAL_AST_HPP
+#define JMAL_AST_HPP
 
 /* strdup is POSIX, not C11 — expose it before any system header is pulled in */
 #ifndef _POSIX_C_SOURCE
@@ -29,7 +29,7 @@ static inline JmalVec jmal_vec_init(void)
 
 static inline void jmal_vec_push(JmalVec *v, void *item)
 {
-    v->items = realloc(v->items, (v->count + 1) * sizeof *v->items);
+    v->items = (void**)realloc(v->items, (v->count + 1) * sizeof *v->items);
     v->items[v->count++] = item;
 }
 
@@ -43,7 +43,7 @@ static inline void jmal_vec_free(JmalVec *v, JmalVecFreeFn fn)
     v->count = 0;
 }
 
-typedef struct {
+typedef struct JmalArity {
     int lo;
     int hi;
 } JmalArity;
@@ -102,7 +102,7 @@ struct JmalTypeConstraintMulti {
 
 static inline JmalTypeConstraintMulti *jmal_type_make_multi(JmalTypeConstraint *a)
 {
-    JmalTypeConstraintMulti *t = malloc(sizeof *t);
+    JmalTypeConstraintMulti *t = (JmalTypeConstraintMulti*)malloc(sizeof *t);
     t->types = jmal_vec_init();
     jmal_vec_push(&t->types, a);
     return t;
@@ -119,7 +119,7 @@ static inline void jmal_type_multi_add_type(JmalTypeConstraintMulti *r, JmalType
 
 static inline JmalTypeConstraint *jmal_type_builtin(JmalTypeKind k, int line)
 {
-    JmalTypeConstraint *t = malloc(sizeof *t);
+    JmalTypeConstraint *t = (JmalTypeConstraint*)malloc(sizeof *t);
     t->kind  = k;
     t->name  = NULL;
     t->line  = line;
@@ -128,7 +128,7 @@ static inline JmalTypeConstraint *jmal_type_builtin(JmalTypeKind k, int line)
 
 static inline JmalTypeConstraint *jmal_type_arg_ref(JmalArgRef arg_ref, int line)
 {
-    JmalTypeConstraint *t = malloc(sizeof *t);
+    JmalTypeConstraint *t = (JmalTypeConstraint*)malloc(sizeof *t);
     t->kind  = JMAL_TYPE_ARG_REF;
     t->value = (int)arg_ref;
     t->line  = line;
@@ -137,7 +137,7 @@ static inline JmalTypeConstraint *jmal_type_arg_ref(JmalArgRef arg_ref, int line
 
 static inline JmalTypeConstraint *jmal_type_lit_int(int v, int line)
 {
-    JmalTypeConstraint *t = malloc(sizeof *t);
+    JmalTypeConstraint *t = (JmalTypeConstraint*)malloc(sizeof *t);
     t->kind  = JMAL_TYPE_LIT_INT;
     t->value = v;
     t->line  = line;
@@ -146,7 +146,7 @@ static inline JmalTypeConstraint *jmal_type_lit_int(int v, int line)
 
 static inline JmalTypeConstraint *jmal_type_user(const char *name, int line)
 {
-    JmalTypeConstraint *t = malloc(sizeof *t);
+    JmalTypeConstraint *t = (JmalTypeConstraint*)malloc(sizeof *t);
     t->kind = JMAL_TYPE_USER;
     t->name = strdup(name);
     t->line = line;
@@ -180,7 +180,7 @@ struct JmalTypeDef {
 
 static inline JmalTypeDef *jmal_typedef_new(const char *name, JmalTypeConstraintMulti *tc, int line)
 {
-    JmalTypeDef *d = malloc(sizeof *d);
+    JmalTypeDef *d = (JmalTypeDef*)malloc(sizeof *d);
     d->name        = strdup(name);
     d->members     = tc;
     d->line        = line;
@@ -214,7 +214,7 @@ struct JmalDefine {
 
 static inline JmalDefine *jmal_define_str(const char *name, const char *val, int line)
 {
-    JmalDefine *d  = malloc(sizeof *d);
+    JmalDefine *d  = (JmalDefine*)malloc(sizeof *d);
     d->name        = strdup(name);
     d->kind        = JMAL_DEFINE_STRING;
     d->str_val     = strdup(val);
@@ -224,7 +224,7 @@ static inline JmalDefine *jmal_define_str(const char *name, const char *val, int
 
 static inline JmalDefine *jmal_define_int(const char *name, int val, int line)
 {
-    JmalDefine *d  = malloc(sizeof *d);
+    JmalDefine *d  = (JmalDefine*)malloc(sizeof *d);
     d->name        = strdup(name);
     d->kind        = JMAL_DEFINE_INT;
     d->int_val     = val;
@@ -234,7 +234,7 @@ static inline JmalDefine *jmal_define_int(const char *name, int val, int line)
 
 static inline JmalDefine *jmal_define_float(const char *name, double val, int line)
 {
-    JmalDefine *d  = malloc(sizeof *d);
+    JmalDefine *d  = (JmalDefine*)malloc(sizeof *d);
     d->name        = strdup(name);
     d->kind        = JMAL_DEFINE_FLOAT;
     d->flt_val     = val;
@@ -258,7 +258,7 @@ struct JmalUse {
 
 static inline JmalUse *jmal_use_new(const char *name, JmalTypeConstraintMulti *tm, int line)
 {
-    JmalUse *u = malloc(sizeof *u);
+    JmalUse *u = (JmalUse*)malloc(sizeof *u);
     u->name    = strdup(name);
     u->args    = tm;
     u->line    = line;
@@ -310,7 +310,7 @@ struct JmalOperand {
 
 static inline JmalOperand *jmal_operand_ident(const char *s, int line)
 {
-    JmalOperand *o = malloc(sizeof *o);
+    JmalOperand *o = (JmalOperand*)malloc(sizeof *o);
     o->kind = JMAL_OPERAND_IDENT;
     o->sval = strdup(s);
     o->line = line;
@@ -319,7 +319,7 @@ static inline JmalOperand *jmal_operand_ident(const char *s, int line)
 
 static inline JmalOperand *jmal_operand_int(int v, int line)
 {
-    JmalOperand *o = malloc(sizeof *o);
+    JmalOperand *o = (JmalOperand*)malloc(sizeof *o);
     o->kind = JMAL_OPERAND_INT;
     o->ival = v;
     o->line = line;
@@ -328,7 +328,7 @@ static inline JmalOperand *jmal_operand_int(int v, int line)
 
 static inline JmalOperand *jmal_operand_float(double v, int line)
 {
-    JmalOperand *o = malloc(sizeof *o);
+    JmalOperand *o = (JmalOperand*)malloc(sizeof *o);
     o->kind = JMAL_OPERAND_FLOAT;
     o->fval = v;
     o->line = line;
@@ -337,7 +337,7 @@ static inline JmalOperand *jmal_operand_float(double v, int line)
 
 static inline JmalOperand *jmal_operand_string(const char *s, int line)
 {
-    JmalOperand *o = malloc(sizeof *o);
+    JmalOperand *o = (JmalOperand*)malloc(sizeof *o);
     o->kind = JMAL_OPERAND_STRING;
     o->sval = strdup(s);
     o->line = line;
@@ -346,7 +346,7 @@ static inline JmalOperand *jmal_operand_string(const char *s, int line)
 
 static inline JmalOperand *jmal_operand_arg_ref(int index, int line)
 {
-    JmalOperand *o = malloc(sizeof *o);
+    JmalOperand *o = (JmalOperand*)malloc(sizeof *o);
     o->kind = JMAL_OPERAND_ARG_REF;
     o->ival = index;
     o->line = line;
@@ -355,7 +355,7 @@ static inline JmalOperand *jmal_operand_arg_ref(int index, int line)
 
 static inline JmalOperand *jmal_operand_address(JmalOperand *inner, int line)
 {
-    JmalOperand *o = malloc(sizeof *o);
+    JmalOperand *o = (JmalOperand*)malloc(sizeof *o);
     o->kind  = JMAL_OPERAND_ADDRESS;
     o->inner = inner;
     o->line  = line;
@@ -391,7 +391,7 @@ struct JmalInstruction {
 
 static inline JmalInstruction *jmal_instr_new(const char *opcode, int line)
 {
-    JmalInstruction *i = malloc(sizeof *i);
+    JmalInstruction *i = (JmalInstruction*)malloc(sizeof *i);
     i->opcode          = strdup(opcode);
     i->operands        = jmal_vec_init();
     i->line            = line;
@@ -423,7 +423,7 @@ struct JmalArgDecl {
 
 static inline JmalArgDecl *jmal_arg_decl_new(JmalArgRef arg_ref, JmalTypeConstraintMulti *tc, int line)
 {
-    JmalArgDecl *a = malloc(sizeof *a);
+    JmalArgDecl *a = (JmalArgDecl*)malloc(sizeof *a);
     a->argRef      = arg_ref;
     a->constraints = tc;
     a->line        = line;
@@ -486,7 +486,7 @@ struct JmalStatement {
 
 static inline JmalStatement *jmal_stmt_arg(JmalArgDecl *a, int line)
 {
-    JmalStatement *s = malloc(sizeof *s);
+    JmalStatement *s = (JmalStatement*)malloc(sizeof *s);
     s->kind = JMAL_STATEMENT_ARG_DECL;
     s->line = line;
     s->arg  = a;
@@ -495,7 +495,7 @@ static inline JmalStatement *jmal_stmt_arg(JmalArgDecl *a, int line)
 
 static inline JmalStatement *jmal_stmt_typedef(JmalTypeDef *t, int line)
 {
-    JmalStatement *s = malloc(sizeof *s);
+    JmalStatement *s = (JmalStatement *)malloc(sizeof *s);
     s->kind = JMAL_STATEMENT_TYPEDEF;
     s->line = line;
     s->type = t;
@@ -504,7 +504,7 @@ static inline JmalStatement *jmal_stmt_typedef(JmalTypeDef *t, int line)
 
 static inline JmalStatement *jmal_stmt_define(JmalDefine *d, int line)
 {
-    JmalStatement *s = malloc(sizeof *s);
+    JmalStatement *s = (JmalStatement *)malloc(sizeof *s);
     s->kind = JMAL_STATEMENT_DEFINE;
     s->line = line;
     s->def  = d;
@@ -513,7 +513,7 @@ static inline JmalStatement *jmal_stmt_define(JmalDefine *d, int line)
 
 static inline JmalStatement *jmal_stmt_rotate_int(int count, int line)
 {
-    JmalStatement *s        = malloc(sizeof *s);
+    JmalStatement *s        = (JmalStatement *)malloc(sizeof *s);
     s->kind                 = JMAL_STATEMENT_ROTATE;
     s->line                 = line;
     s->rotate.rotate_kind   = JMAL_ROTATE_INT;
@@ -523,7 +523,7 @@ static inline JmalStatement *jmal_stmt_rotate_int(int count, int line)
 
 static inline JmalStatement *jmal_stmt_rotate_arg(JmalArgRef arg_ref, int line)
 {
-    JmalStatement *s        = malloc(sizeof *s);
+    JmalStatement *s        = (JmalStatement *)malloc(sizeof *s);
     s->kind                 = JMAL_STATEMENT_ROTATE;
     s->line                 = line;
     s->rotate.rotate_kind   = JMAL_ROTATE_ARG;
@@ -533,7 +533,7 @@ static inline JmalStatement *jmal_stmt_rotate_arg(JmalArgRef arg_ref, int line)
 
 static inline JmalStatement *jmal_stmt_instr(JmalInstruction *i, int line)
 {
-    JmalStatement *s = malloc(sizeof *s);
+    JmalStatement *s = (JmalStatement *)malloc(sizeof *s);
     s->kind  = JMAL_STATEMENT_INSTR;
     s->line  = line;
     s->instr = i;
@@ -542,7 +542,7 @@ static inline JmalStatement *jmal_stmt_instr(JmalInstruction *i, int line)
 
 static inline JmalStatement *jmal_stmt_use(JmalUse *u, int line)
 {
-    JmalStatement *s = malloc(sizeof *s);
+    JmalStatement *s = (JmalStatement *)malloc(sizeof *s);
     s->kind = JMAL_STATEMENT_USE;
     s->line = line;
     s->use  = u;
@@ -554,7 +554,7 @@ static inline void jmal_stmt_free(JmalStatement *s);
 
 static inline JmalStatementMulti *jmal_stmt_make_multi(JmalStatement *s)
 {
-    JmalStatementMulti *m = malloc(sizeof *m);
+    JmalStatementMulti *m = (JmalStatementMulti *)malloc(sizeof *m);
     m->stmts = jmal_vec_init();
     jmal_vec_push(&m->stmts, s);
     return m;
@@ -580,7 +580,7 @@ static inline void jmal_stmt_multi_free(JmalStatementMulti *m)
 
 static inline JmalStatement *jmal_stmt_rep(JmalStatementMulti *body, int line)
 {
-    JmalStatement *s = malloc(sizeof *s);
+    JmalStatement *s = (JmalStatement *)malloc(sizeof *s);
     s->kind     = JMAL_STATEMENT_REP;
     s->line     = line;
     s->rep.body = body;
@@ -620,7 +620,7 @@ static inline JmalMacro *jmal_macro_new(const char *name,
                                          JmalArity in, JmalArity out,
                                          int line)
 {
-    JmalMacro *m  = malloc(sizeof *m);
+    JmalMacro *m  = (JmalMacro *)malloc(sizeof *m);
     m->name       = strdup(name);
     m->arity_in   = in;
     m->arity_out  = out;
@@ -654,7 +654,7 @@ struct JmalProgram {
 
 static inline JmalProgram *jmal_program_new(const char *filename)
 {
-    JmalProgram *p = malloc(sizeof *p);
+    JmalProgram *p = (JmalProgram *)malloc(sizeof *p);
     p->typedefs    = jmal_vec_init();
     p->defines     = jmal_vec_init();
     p->macros      = jmal_vec_init();
