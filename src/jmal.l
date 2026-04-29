@@ -2,12 +2,37 @@
 
 #include <parser.hpp>
 #include <string>
+#include <stdexcept>
 
 int yyline = 1;
 int yycol  = 1;
 
 #undef  YY_DECL
 #define YY_DECL yy::parser::symbol_type yylex()
+
+static std::string unescape_string(const char *raw)
+{
+    /* raw is  "..."  — skip opening quote, stop before closing quote */
+    std::string result;
+    const char *p = raw + 1;
+    while (*p && !(p[0] == '"' && p[-1] != '\\')) {
+        if (*p == '\\') {
+            ++p;
+            switch (*p) {
+                case 'n':  result += '\n'; break;
+                case 't':  result += '\t'; break;
+                case 'r':  result += '\r'; break;
+                case '\\': result += '\\'; break;
+                case '"':  result += '"';  break;
+                default:   result += '\\'; result += *p; break;
+            }
+        } else {
+            result += *p;
+        }
+        ++p;
+    }
+    return result;
+}
 
 %}
 
@@ -52,9 +77,11 @@ REF_ARG     "&"[0-9]+
 "%rotate"           { return yy::parser::make_DIR_ROTATE();         }
 "%0"                { return yy::parser::make_DIR_ARG_COUNT();      }
 
-{ARG_REF}           { return yy::parser::make_TOK_ARG_REF(std::stoi(yytext + 1)); }
+{ARG_REF}           { return yy::parser::make_TOK_ARG_REF(
+                          static_cast<unsigned int>(std::stoul(yytext + 1))); }
 
-{REF_ARG}           { return yy::parser::make_TOK_REF_ARG(std::stoi(yytext + 1)); }
+{REF_ARG}           { return yy::parser::make_TOK_REF_ARG(
+                          std::stoi(yytext + 1)); }
 
 "register"          { return yy::parser::make_TYPE_REGISTER();  }
 "string"            { return yy::parser::make_TYPE_STRING();    }
@@ -65,20 +92,24 @@ REF_ARG     "&"[0-9]+
 "str"               { return yy::parser::make_TOK_STR_PREFIX();   }
 "int"               { return yy::parser::make_TOK_INT_PREFIX();   }
 
-{DEC_INT}             { return yy::parser::make_TOK_INT(std::stod(yytext));      }
-
-{FLOAT}               { return yy::parser::make_TOK_FLOAT(std::stod(yytext));    }
-
-{STRING}              { return yy::parser::make_TOK_STRING(std::string(yytext)); }
-
-{IDENT}               { return yy::parser::make_TOK_IDENT(std::string(yytext));  }
-
+    /* ── Ranged arity: must be matched before plain DEC_INT ── */
 {DEC_INT}"-"{DEC_INT} {
-                        char *dash = strchr(yytext, '-');
-                        int lo = atoi(yytext);
-                        int hi = atoi(dash + 1);
-                        return yy::parser::make_TOK_RANGE({lo, hi});
+                        /* std::string avoids raw pointer arithmetic */
+                        std::string text(yytext);
+                        auto dash = text.find('-');
+                        int lo = std::stoi(text.substr(0, dash));
+                        int hi = std::stoi(text.substr(dash + 1));
+                        return yy::parser::make_TOK_RANGE(JmalArity{lo, hi});
                       }
+
+{DEC_INT}             { return yy::parser::make_TOK_INT(std::stoi(yytext));   }
+
+{FLOAT}               { return yy::parser::make_TOK_FLOAT(std::stod(yytext)); }
+
+    /* Strip surrounding quotes and process escapes */
+{STRING}              { return yy::parser::make_TOK_STRING(unescape_string(yytext)); }
+
+{IDENT}               { return yy::parser::make_TOK_IDENT(std::string(yytext)); }
 
 ","                 { return yy::parser::make_TOK_COMMA();           }
 ":"                 { return yy::parser::make_TOK_COLON();           }

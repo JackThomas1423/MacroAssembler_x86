@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <parser.hpp>
-#include "jmal_ast.hpp"
+#include <src/jmal_ast.hpp>
 
 using namespace yy;
 
