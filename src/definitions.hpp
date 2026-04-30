@@ -19,33 +19,33 @@ STATEMENT_TYPE(Define,  HAS_HEADER, NO_CHILDREN,  std::string)
 
 // ─── Custom types ─────────────────────────────────────────────────────────────
 
-// %use <name> [args]
+// %use <name> [args...]
 STATEMENT_TYPE_CUSTOM(Use, HAS_HEADER, NO_CHILDREN,
-    h.name)
-    HEADER_FIELD(std::string,              name)
-    HEADER_FIELD(std::vector<std::string>, arguments)
+    h.name << " " << h.arguments)
+    HEADER_FIELD(std::string,   name)
+    HEADER_FIELD(JmalTypeList,  arguments)
 END_STATEMENT_TYPE(Use)
 
-// %macro <name> <min_args>-<max_args> ... %endmacro
+// %macro <name> <in_arity> <out_arity> ... %endmacro
 STATEMENT_TYPE_CUSTOM(Macro, HAS_HEADER, HAS_CHILDREN,
-    h.name << " " << h.min_args << "-" << h.max_args)
+    h.name << " " << h.arity_in << " " << h.arity_out)
     HEADER_FIELD(std::string, name)
-    HEADER_FIELD(int,         min_args)
-    HEADER_FIELD(int,         max_args)
+    HEADER_FIELD(JmalArity,   arity_in)
+    HEADER_FIELD(JmalArity,   arity_out)
 END_STATEMENT_TYPE(Macro)
 
 // %arg %N : type | type | ...
 STATEMENT_TYPE_CUSTOM(Arg, HAS_HEADER, NO_CHILDREN,
     h.param << " : " << h.type_constraints)
-    HEADER_FIELD(std::string,              param)
-    HEADER_FIELD(std::vector<std::string>, type_constraints)
+    HEADER_FIELD(unsigned int,  param)
+    HEADER_FIELD(JmalTypeList,  type_constraints)
 END_STATEMENT_TYPE(Arg)
 
 // %ref &N : type | type | ...
 STATEMENT_TYPE_CUSTOM(Ref, HAS_HEADER, NO_CHILDREN,
     h.param << " : " << h.type_constraints)
-    HEADER_FIELD(std::string,              param)
-    HEADER_FIELD(std::vector<std::string>, type_constraints)
+    HEADER_FIELD(int,           param)
+    HEADER_FIELD(JmalTypeList,  type_constraints)
 END_STATEMENT_TYPE(Ref)
 
 // %ensure <lhs> <op> <rhs>
@@ -79,14 +79,13 @@ END_STATEMENT_TYPE(Rotate)
 // %type <name>: type | type | ...
 STATEMENT_TYPE_CUSTOM(Type, HAS_HEADER, NO_CHILDREN,
     h.name << ": " << h.constraints)
-    HEADER_FIELD(std::string,              name)
-    HEADER_FIELD(std::vector<std::string>, constraints)
+    HEADER_FIELD(std::string,   name)
+    HEADER_FIELD(JmalTypeList,  constraints)
 END_STATEMENT_TYPE(Type)
 
-// <opcode> [operands]  — a raw instruction inside a macro body or at top level
-// Note: operands will need to become a proper variant type once the AST is wired in
+// <opcode> [operands]
 STATEMENT_TYPE_CUSTOM(Instruction, HAS_HEADER, NO_CHILDREN,
     h.opcode << " " << h.operands)
-    HEADER_FIELD(std::string,              opcode)
-    HEADER_FIELD(std::vector<std::string>, operands)
+    HEADER_FIELD(std::string,     opcode)
+    HEADER_FIELD(JmalOperandList, operands)
 END_STATEMENT_TYPE(Instruction)

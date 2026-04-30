@@ -1,29 +1,29 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <parser.hpp>
-#include <src/jmal_ast.hpp>
+#include <src/templates.hpp>
 
 using namespace yy;
 
 extern "C" FILE *yyin;
 
-JmalProgram *jmal_program = NULL;
+JmalProgram *jmal_program = nullptr;
 
 int main(int argc, char **argv)
 {
-    const char *filename = argc > 1 ? argv[1] : NULL;
+    const char *filename = argc > 1 ? argv[1] : nullptr;
 
-    jmal_program = jmal_program_new(filename);
+    jmal_program = new JmalProgram(filename ? filename : "<stdin>");
 
     if (filename) {
         FILE *f = fopen(filename, "r");
         if (!f) {
             perror(filename);
-            jmal_program_free(jmal_program);
+            delete jmal_program;
             return 1;
         }
         yyin = f;
     }
+    std::cout << "Parsing..." << std::endl;
 
     yy::parser p;
     p.parse();
@@ -31,9 +31,10 @@ int main(int argc, char **argv)
     if (yyin && yyin != stdin)
         fclose(yyin);
 
-    jmal_program_dump(jmal_program);
+    std::cout << "Dumping program contents..." << std::endl;
+    jmal_program->dump();
 
-    jmal_program_free(jmal_program);
+    delete jmal_program;
 
     return 0;
 }

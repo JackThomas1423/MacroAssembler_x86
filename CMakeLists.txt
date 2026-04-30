@@ -23,8 +23,6 @@ FLEX_TARGET(
 
 ADD_FLEX_BISON_DEPENDENCY(Lexer Parser)
 
-add_library(ast src/jmal_ast.cpp)
-
 add_executable(jmal
     src/main.cpp
     ${BISON_Parser_OUTPUTS}
@@ -48,6 +46,5 @@ target_include_directories(jmal PRIVATE
 )
 
 target_link_libraries(jmal PRIVATE
-    ast
     ${FLEX_LIBRARIES}
 )
