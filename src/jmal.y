@@ -15,7 +15,7 @@
     yy::parser::symbol_type yylex();
     extern int yylineno;
 
-    static JmalProgram *jmal_program = nullptr;
+    extern JmalProgram *jmal_program;
 
     // Current instruction being built
     static InstructionStatement *current_instr = nullptr;
@@ -155,7 +155,8 @@ type_dir:
     DIR_TYPE TOK_IDENT TOK_COLON type_union
     {
         jmal_program->add_stmt(TypeStatement {
-            .header = { .name = $2, .constraints = std::move($4) }
+            .header = { .name = $2, .constraints = std::move($4) },
+            .children = {}
         });
     }
     ;
@@ -180,7 +181,8 @@ macro_header:
                 .name      = $2,
                 .arity_in  = JmalArity::fixed($3),
                 .arity_out = JmalArity::fixed($4),
-            }
+            },
+            .children = {}
         };
     }
     | DIR_MACRO TOK_IDENT TOK_RANGE TOK_INT
@@ -190,7 +192,8 @@ macro_header:
                 .name      = $2,
                 .arity_in  = $3,
                 .arity_out = JmalArity::fixed($4),
-            }
+            },
+            .children = {}
         };
     }
     ;
@@ -231,7 +234,8 @@ ensure_def:
     DIR_ENSURE ensure_operand ensure_op ensure_operand newlines
     {
         $$ = EnsureStatement{
-            .header = { .lhs = $2, .op = $3, .rhs = $4 }
+            .header = { .lhs = $2, .op = $3, .rhs = $4 },
+            .children = {}
         };
     }
     ;
@@ -291,13 +295,15 @@ rotate_def:
     DIR_ROTATE TOK_INT newlines
     {
         $$ = RotateStatement{
-            .header = { .amount = std::to_string($2) }
+            .header = { .amount = std::to_string($2) },
+            .children = {}
         };
     }
     | DIR_ROTATE TOK_ARG_REF newlines
     {
         $$ = RotateStatement{
-            .header = { .amount = "%" + std::to_string($2) }
+            .header = { .amount = "%" + std::to_string($2) },
+            .children = {}
         };
     }
     ;
@@ -318,13 +324,15 @@ arg_decl:
     DIR_ARG TOK_ARG_REF TOK_COLON type_constraint
     {
         $$ = ArgStatement{
-            .header = { .param = $2, .type_constraints = { $4 } }
+            .header = { .param = $2, .type_constraints = { $4 } },
+            .children = {}
         };
     }
     | DIR_ARG TOK_ARG_REF TOK_COLON type_union
     {
         $$ = ArgStatement{
-            .header = { .param = $2, .type_constraints = std::move($4) }
+            .header = { .param = $2, .type_constraints = std::move($4) },
+            .children = {}
         };
     }
     ;
@@ -375,13 +383,15 @@ use_def:
     DIR_USE TOK_IDENT use_def_args
     {
         $$ = UseStatement{
-            .header = { .name = $2, .arguments = std::move($3) }
+            .header = { .name = $2, .arguments = std::move($3) },
+            .children = {}
         };
     }
     | DIR_USE TOK_IDENT
     {
         $$ = UseStatement{
-            .header = { .name = $2, .arguments = {} }
+            .header = { .name = $2, .arguments = {} },
+            .children = {}
         };
     }
     ;
@@ -406,7 +416,8 @@ instruction:
     TOK_IDENT
     {
         current_instr = new InstructionStatement{
-            .header = { .opcode = $1, .operands = {} }
+            .header = { .opcode = $1, .operands = {} },
+            .children = {}
         };
     }
     operand_list

@@ -59,7 +59,7 @@ END_STATEMENT_TYPE(Ensure)
 // %rep <count|cond> ... %endrep
 STATEMENT_TYPE_CUSTOM(Rep, HAS_HEADER, HAS_CHILDREN,
     h.condition)
-    HEADER_FIELD(std::string, condition)
+    HEADER_FIELD(JmalTypeConstraint, condition)
 END_STATEMENT_TYPE(Rep)
 
 // %if <cond> ... %endif

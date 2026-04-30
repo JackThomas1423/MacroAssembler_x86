@@ -357,9 +357,15 @@ struct JmalProgram {
 
     explicit JmalProgram(const std::string& filename) : filename(filename) {}
 
-    void add_define(JmalDefine d)       { defines.push_back(std::move(d));  }
-    void add_macro (MacroStatement m)   { macros .push_back(std::move(m));  }
-    void add_stmt  (AnyStatement s)     { body   .push_back(std::move(s));  }
+    void add_define(JmalDefine d) {
+        defines.push_back(std::move(d));
+    }
+    void add_macro(MacroStatement m) {
+        macros.push_back(std::move(m));
+    }
+    void add_stmt(AnyStatement s) {
+        body.push_back(std::move(s));
+    }
 
     void dump() const {
         std::cout << "Program: " << filename << "\n";
