@@ -10,18 +10,18 @@
 // Diagnostic helper
 // ---------------------------------------------------------------------------
 
-#ifdef JMAL_NO_TODO_ASSERT
+#ifdef ASSERT_TODO
 #  define JMAL_TODO(msg)                                                \
     do {                                                                \
-        std::fprintf(stderr, "warning: TODO: %s  (%s:%d)\n",           \
+        std::fprintf(stderr, "TODO: %s  (%s:%d)\n",                     \
                      (msg), __FILE__, __LINE__);                        \
+        assert(false);                                                  \
     } while (false)
 #else
 #  define JMAL_TODO(msg)                                                \
     do {                                                                \
-        std::fprintf(stderr, "TODO: %s  (%s:%d)\n",                    \
+        std::fprintf(stderr, "Warning: TODO: %s  (%s:%d)\n",            \
                      (msg), __FILE__, __LINE__);                        \
-        assert(false);                                                  \
     } while (false)
 #endif
 
