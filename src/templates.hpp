@@ -8,6 +8,7 @@
 #include <variant>
 #include <vector>
 #include <string>
+#include <boost/pfr.hpp>
 
 // ─── Diagnostic helper ───────────────────────────────────────────────────────
 
@@ -235,6 +236,50 @@ inline std::ostream& operator<<(std::ostream& os, Type type) {
 template <Type T> struct has_header   : std::false_type {};
 template <Type T> struct has_children : std::false_type {};
 
+// ─── Pass 1: generate custom header structs ───────────────────────────────────
+
+#define STATEMENT_TYPE(...)
+#define STATEMENT_TYPE_CUSTOM(Name, WithHeader, WithChildren) \
+    struct Name##Header {
+#define HEADER_FIELD(FieldType, Field) \
+        FieldType Field;
+#define END_STATEMENT_TYPE(Name) \
+    };
+#include "definitions.hpp"
+#undef STATEMENT_TYPE
+#undef STATEMENT_TYPE_CUSTOM
+#undef HEADER_FIELD
+#undef END_STATEMENT_TYPE
+
+template <typename T, typename... Args>
+inline T make_base(Args&&... args) {
+    return T{std::forward<Args>(args)...};
+}
+
+// ─── PFR-powered generic header printer ──────────────────────────────────────
+//
+// Boost.PFR reflects any aggregate struct without registration or annotation.
+// Fields are visited in declaration order and printed space-separated.
+//
+// The enable_if guard uses two conditions:
+//   - std::is_aggregate_v<T>  — only plain aggregates (our generated headers)
+//   - !std::is_array_v<T>     — exclude raw arrays, which are also aggregates
+// Types that already have their own operator<< (std::string, JmalArity, etc.)
+// are not affected because overload resolution prefers exact/non-template matches.
+
+template <typename T>
+auto operator<<(std::ostream& os, const T& h)
+    -> std::enable_if_t<std::is_aggregate_v<T> && !std::is_array_v<T>, std::ostream&>
+{
+    bool first = true;
+    boost::pfr::for_each_field(h, [&](const auto& val) {
+        if (!first) os << " ";
+        first = false;
+        os << val;
+    });
+    return os;
+}
+
 // ─── Statement template ──────────────────────────────────────────────────────
 
 struct AnyStatement;
@@ -276,27 +321,6 @@ struct Statement {
                 child.display(indent + 1);
     }
 };
-
-// ─── Pass 1: generate custom header structs ───────────────────────────────────
-
-#define STATEMENT_TYPE(...)
-#define STATEMENT_TYPE_CUSTOM(Name, WithHeader, WithChildren, PrintExpr) \
-    struct Name##Header {                                                 \
-        static std::ostream& print(std::ostream& os, const Name##Header& h) { \
-            return os << PrintExpr;                                       \
-        }
-#define HEADER_FIELD(FieldType, Field) \
-        FieldType Field;
-#define END_STATEMENT_TYPE(Name)                                                \
-    friend std::ostream& operator<<(std::ostream& os, const Name##Header& h) { \
-        return Name##Header::print(os, h);                                      \
-    }                                                                           \
-};
-#include "definitions.hpp"
-#undef STATEMENT_TYPE
-#undef STATEMENT_TYPE_CUSTOM
-#undef HEADER_FIELD
-#undef END_STATEMENT_TYPE
 
 // ─── Pass 2: specialize traits + declare aliases ──────────────────────────────
 

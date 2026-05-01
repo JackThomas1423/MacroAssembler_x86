@@ -7,6 +7,7 @@ set(CMAKE_PCH_INSTANTIATE_TEMPLATES ON)
 
 find_package(BISON REQUIRED)
 find_package(FLEX  REQUIRED)
+find_package(Boost REQUIRED)
 
 BISON_TARGET(
     Parser
